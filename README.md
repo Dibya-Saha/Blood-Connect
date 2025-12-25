@@ -1,4 +1,4 @@
-# 🩸 BloodConnect Bangladesh
+# 🩸 BloodConnect 
 
 A modern, bilingual (English/বাংলা) blood donation management platform connecting donors with those in need across Bangladesh.
 
@@ -21,17 +21,19 @@ A modern, bilingual (English/বাংলা) blood donation management platform
 
 ### Installation
 
-1. **Clone or Download** this repository
+1. **Clone * this repository
 
 2. **Install dependencies**:
 ```bash
 npm install
+npm d3
+npm list
 ```
 
 3. **Set up environment variables**:
 ```bash
 # Copy the example env file
-cp .env.example .env
+cp .env.example ---> .env
 
 # Edit .env and add your Gemini API key
 # .env file should contain:
@@ -40,7 +42,9 @@ VITE_GEMINI_API_KEY=your_actual_api_key_here
 
 4. **Run the development server**:
 ```bash
-npm run dev
+npm run dev (start) 
+ctrl + C (terminate)
+
 ```
 
 5. **Open your browser** to `http://localhost:3000`
@@ -89,7 +93,8 @@ bloodconnect-bangladesh/
 - **Recharts** for data visualization
 - **Leaflet** for interactive maps
 - **Google Gemini AI** for health assistant
-- **LocalStorage** for mock database (development)
+- **LocalStorage** for mock database (development) (in Future connet into  Claude MongoDB Atlas)
+- **BackEed** Express js and connects APIs from front to backend
 
 ## 🎨 Features Breakdown
 
@@ -136,23 +141,6 @@ bloodconnect-bangladesh/
 
 ## 🌐 Deployment
 
-### Deploy to Vercel
-
-1. Push your code to GitHub
-2. Go to [Vercel](https://vercel.com)
-3. Import your repository
-4. Add environment variable: `VITE_GEMINI_API_KEY`
-5. Deploy!
-
-### Deploy to Netlify
-
-1. Push your code to GitHub
-2. Go to [Netlify](https://netlify.com)
-3. Import your repository
-4. Build command: `npm run build`
-5. Publish directory: `dist`
-6. Add environment variable: `VITE_GEMINI_API_KEY`
-7. Deploy!
 
 ## 🔑 Getting a Gemini API Key
 
@@ -190,6 +178,5 @@ This project is open source and available for educational purposes.
 
 For questions or support, please open an issue on GitHub.
 
----
 
-ি
+
