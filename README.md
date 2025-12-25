@@ -192,4 +192,4 @@ For questions or support, please open an issue on GitHub.
 
 ---
 
-Made with ❤️ for Bangladesh | বাংলাদেশের জন্য ভালোবাসা দিয়ে তৈরি
+ি
