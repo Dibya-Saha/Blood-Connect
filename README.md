@@ -21,7 +21,7 @@ A modern, bilingual (English/বাংলা) blood donation management platform
 
 ### Installation
 
-1. **Clone * this repository
+1. **Clone this repository**
 
 2. **Install dependencies**:
 ```bash
@@ -33,7 +33,7 @@ npm list
 3. **Set up environment variables**:
 ```bash
 # Copy the example env file
-cp .env.example ---> .env
+make the env.example file to .env 
 
 # Edit .env and add your Gemini API key
 # .env file should contain:
@@ -42,8 +42,10 @@ VITE_GEMINI_API_KEY=your_actual_api_key_here
 
 4. **Run the development server**:
 ```bash
-npm run dev (start) 
-ctrl + C (terminate)
+#start
+npm run dev 
+#terminate
+ctrl + C 
 
 ```
 
