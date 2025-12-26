@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Heart, Mail, Lock, User as UserIcon, Phone, Droplet, Globe, ChevronRight, AlertCircle, Calendar, Scale, MapPin, UserCheck, ShieldAlert, Building2, CheckCircle2 } from 'lucide-react';
-import { mockLogin, mockSignup } from '../services/authService';
+import { login, signup } from '../services/authService';
 import { User, BloodGroup } from '../types';
 
 interface AuthProps {
@@ -53,38 +53,40 @@ const Auth: React.FC<AuthProps> = ({ onLogin, language, onToggleLanguage }) => {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setErrorMsg(null);
+  e.preventDefault();
+  setIsLoading(true);
+  setErrorMsg(null);
 
-    try {
-      if (isLogin) {
-        const user = await mockLogin(formData.email, formData.password);
-        onLogin(user);
-      } else {
-        if (formData.password !== formData.confirmPassword) {
-          throw new Error(language === 'en' ? "Passwords do not match" : "পাসওয়ার্ড মিলছে না");
-        }
-        if (!validateAge(formData.dob)) {
-          throw new Error(language === 'en' ? "You must be at least 18 years old to register" : "নিবন্ধনের জন্য আপনার বয়স কমপক্ষে ১৮ বছর হতে হবে");
-        }
-        if (Number(formData.weight) < 50) {
-          throw new Error(language === 'en' ? "Weight must be at least 50kg to donate" : "রক্তদানের জন্য ওজন কমপক্ষে ৫০ কেজি হতে হবে");
-        }
-        if (!formData.phone.match(/^\+8801[3-9]\d{8}$/)) {
-          throw new Error(language === 'en' ? "Invalid Phone format. Use +8801XXXXXXXXX" : "ফোন নম্বর সঠিক নয়। +8801XXXXXXXXX ব্যবহার করুন");
-        }
-
-        const user = await mockSignup(formData);
-        onLogin(user);
+  try {
+    if (isLogin) {
+      // Call real login function
+      const user = await login(formData.email, formData.password);
+      onLogin(user);
+    } else {
+      // Validation checks
+      if (formData.password !== formData.confirmPassword) {
+        throw new Error(language === 'en' ? "Passwords do not match" : "পাসওয়ার্ড মিলছে না");
       }
-    } catch (error: any) {
-      setErrorMsg(error.message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      if (!validateAge(formData.dob)) {
+        throw new Error(language === 'en' ? "You must be at least 18 years old to register" : "নিবন্ধনের জন্য আপনার বয়স কমপক্ষে ১৮ বছর হতে হবে");
+      }
+      if (Number(formData.weight) < 50) {
+        throw new Error(language === 'en' ? "Weight must be at least 50kg to donate" : "রক্তদানের জন্য ওজন কমপক্ষে ৫০ কেজি হতে হবে");
+      }
+      if (!formData.phone.match(/^\+8801[3-9]\d{8}$/)) {
+        throw new Error(language === 'en' ? "Invalid Phone format. Use +8801XXXXXXXXX" : "ফোন নম্বর সঠিক নয়। +8801XXXXXXXXX ব্যবহার করুন");
+      }
 
+      // Call real signup function
+      const user = await signup(formData);
+      onLogin(user);
+    }
+  } catch (error: any) {
+    setErrorMsg(error.message);
+  } finally {
+    setIsLoading(false);
+  }
+};
   const labels = {
     title: { en: 'BloodConnect', bn: 'ব্লাডকানেক্ট' },
     subtitle: { en: 'Connecting Donors, Saving Lives', bn: 'রক্তদাতার সাথে গ্রহীতার মেলবন্ধন' },

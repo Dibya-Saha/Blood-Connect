@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Map, Database, MessageCircle, User as UserIcon, LogOut, Menu, X, Zap, Droplet, MessageSquare } from 'lucide-react';
+import { Heart, Home, MapPin, Database, MessageCircle, User as UserIcon, LogOut, Droplet, Sparkles } from 'lucide-react';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import EmergencyMap from './components/EmergencyMap';
@@ -9,6 +9,7 @@ import Profile from './components/Profile';
 import RequestBlood from './components/RequestBlood';
 import Chat from './components/Chat';
 import { User } from './types';
+import { getCurrentUser, logout, isAuthenticated } from './services/authService';
 
 type Tab = 'dashboard' | 'map' | 'inventory' | 'myths' | 'profile' | 'request' | 'chat';
 
@@ -16,160 +17,126 @@ function App() {
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
   const [language, setLanguage] = useState<'en' | 'bn'>('en');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  // Check for existing session on mount
   useEffect(() => {
-    const savedUser = localStorage.getItem('bloodconnect_current_user');
-    if (savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (e) {
-        localStorage.removeItem('bloodconnect_current_user');
+    if (isAuthenticated()) {
+      const existingUser = getCurrentUser();
+      if (existingUser) {
+        setUser(existingUser);
       }
     }
   }, []);
 
   const handleLogin = (loggedInUser: User) => {
     setUser(loggedInUser);
-    localStorage.setItem('bloodconnect_current_user', JSON.stringify(loggedInUser));
-  };
-
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('bloodconnect_current_user');
     setActiveTab('dashboard');
   };
 
-  const toggleLanguage = () => {
-    setLanguage(prev => prev === 'en' ? 'bn' : 'en');
+  const handleLogout = () => {
+    logout();
+    setUser(null);
+    setActiveTab('dashboard');
   };
 
   if (!user) {
-    return <Auth onLogin={handleLogin} language={language} onToggleLanguage={toggleLanguage} />;
+    return (
+      <Auth 
+        onLogin={handleLogin} 
+        language={language}
+        onToggleLanguage={() => setLanguage(language === 'en' ? 'bn' : 'en')}
+      />
+    );
   }
 
-  const navItems = [
-    { id: 'dashboard' as Tab, label: { en: 'Dashboard', bn: 'ড্যাশবোর্ড' }, icon: Heart },
-    { id: 'request' as Tab, label: { en: 'Request Blood', bn: 'রক্তের অনুরোধ' }, icon: Droplet },
-    { id: 'map' as Tab, label: { en: 'Emergency Map', bn: 'জরুরী ম্যাপ' }, icon: Map },
-    { id: 'inventory' as Tab, label: { en: 'Inventory', bn: 'ইনভেন্টরি' }, icon: Database },
-    { id: 'chat' as Tab, label: { en: 'Messages', bn: 'বার্তা' }, icon: MessageSquare },
-    { id: 'myths' as Tab, label: { en: 'AI Assistant', bn: 'এআই সহায়ক' }, icon: MessageCircle },
-    { id: 'profile' as Tab, label: { en: 'Profile', bn: 'প্রোফাইল' }, icon: UserIcon },
-  ];
+  const tabs = {
+    dashboard: { label: { en: 'Dashboard', bn: 'ড্যাশবোর্ড' }, icon: <Home size={20} /> },
+    map: { label: { en: 'Emergency Map', bn: 'জরুরী ম্যাপ' }, icon: <MapPin size={20} /> },
+    request: { label: { en: 'Request Blood', bn: 'রক্ত অনুরোধ' }, icon: <Droplet size={20} /> },
+    inventory: { label: { en: 'Inventory', bn: 'ইনভেন্টরি' }, icon: <Database size={20} /> },
+    chat: { label: { en: 'Messages', bn: 'বার্তা' }, icon: <MessageCircle size={20} /> },
+    myths: { label: { en: 'AI Assistant', bn: 'এআই সহকারী' }, icon: <Sparkles size={20} /> },
+    profile: { label: { en: 'Profile', bn: 'প্রোফাইল' }, icon: <UserIcon size={20} /> },
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Top Navigation Bar */}
-      <nav className="bg-white border-b border-gray-100 sticky top-0 z-50 shadow-sm">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-red-50/20 to-gray-50">
+      {/* Header */}
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            {/* Logo */}
             <div className="flex items-center gap-3">
-              <div className="bg-red-600 p-2 rounded-xl shadow-lg">
+              <div className="bg-red-600 p-2 rounded-xl shadow-lg shadow-red-100">
                 <Heart className="text-white" size={24} fill="white" />
               </div>
               <div>
-                <h1 className="text-xl font-black text-gray-900 tracking-tight">BloodConnect</h1>
-                <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Bangladesh</p>
+                <h1 className="text-xl font-black text-gray-900 tracking-tight">
+                  {language === 'en' ? 'BloodConnect' : 'ব্লাডকানেক্ট'}
+                </h1>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                  {language === 'en' ? 'Bangladesh' : 'বাংলাদেশ'}
+                </p>
               </div>
             </div>
 
-            {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center gap-2">
-              {navItems.map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                    activeTab === item.id
-                      ? 'bg-red-600 text-white shadow-lg'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <item.icon size={18} />
-                  <span className="hidden lg:inline">{item.label[language]}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Right Side Actions */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
               <button
-                onClick={toggleLanguage}
-                className="hidden sm:flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-200 transition-all"
+                onClick={() => setLanguage(language === 'en' ? 'bn' : 'en')}
+                className="px-3 py-1.5 text-xs font-bold text-gray-600 hover:text-red-600 transition-colors border border-gray-200 rounded-lg hover:border-red-200"
               >
-                {language === 'en' ? 'বাংলা' : 'EN'}
-              </button>
-              <button
-                onClick={handleLogout}
-                className="hidden sm:flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl text-sm font-bold hover:bg-red-100 transition-all"
-              >
-                <LogOut size={18} />
-                <span className="hidden lg:inline">{language === 'en' ? 'Logout' : 'লগআউট'}</span>
+                {language === 'en' ? 'বাংলা' : 'English'}
               </button>
               
-              {/* Mobile Menu Button */}
-              <button
-                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                className="md:hidden p-2 rounded-xl bg-gray-100 text-gray-600"
-              >
-                {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-              </button>
+              <div className="flex items-center gap-3 pl-4 border-l border-gray-200">
+                <div className="text-right">
+                  <p className="text-sm font-black text-gray-900">{user.name}</p>
+                  <p className="text-xs font-bold text-red-600">{user.bloodGroup}</p>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                  title={language === 'en' ? 'Logout' : 'লগআউট'}
+                >
+                  <LogOut size={20} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
+      </header>
 
-        {/* Mobile Menu */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden border-t border-gray-100 bg-white animate-in slide-in-from-top-4 duration-200">
-            <div className="px-4 py-4 space-y-2">
-              {navItems.map(item => (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setActiveTab(item.id);
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
-                    activeTab === item.id
-                      ? 'bg-red-600 text-white'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <item.icon size={20} />
-                  {item.label[language]}
-                </button>
-              ))}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Navigation Tabs */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-2 mb-8 overflow-x-auto">
+          <div className="flex gap-2 min-w-max">
+            {(Object.keys(tabs) as Tab[]).map((tab) => (
               <button
-                onClick={toggleLanguage}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-100"
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all whitespace-nowrap ${
+                  activeTab === tab
+                    ? 'bg-red-600 text-white shadow-lg shadow-red-100'
+                    : 'text-gray-600 hover:bg-gray-50'
+                }`}
               >
-                <Zap size={20} />
-                {language === 'en' ? 'Switch to বাংলা' : 'Switch to English'}
+                {tabs[tab].icon}
+                {tabs[tab].label[language]}
               </button>
-              <button
-                onClick={handleLogout}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold text-red-600 hover:bg-red-50"
-              >
-                <LogOut size={20} />
-                {language === 'en' ? 'Logout' : 'লগআউট'}
-              </button>
-            </div>
+            ))}
           </div>
-        )}
-      </nav>
+        </div>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {activeTab === 'dashboard' && <Dashboard language={language} user={user} onNavigate={setActiveTab} />}
-        {activeTab === 'request' && <RequestBlood language={language} user={user} />}
-        {activeTab === 'map' && <EmergencyMap language={language} />}
-        {activeTab === 'inventory' && <Inventory language={language} />}
-        {activeTab === 'chat' && <Chat language={language} user={user} />}
-        {activeTab === 'myths' && <MythsAssistant language={language} />}
-        {activeTab === 'profile' && <Profile user={user} language={language} />}
-      </main>
+        {/* Content */}
+        <div className="animate-in fade-in duration-500">
+          {activeTab === 'dashboard' && <Dashboard language={language} user={user} onNavigate={setActiveTab} />}
+          {activeTab === 'map' && <EmergencyMap language={language} />}
+          {activeTab === 'request' && <RequestBlood language={language} user={user} />}
+          {activeTab === 'inventory' && <Inventory language={language} />}
+          {activeTab === 'chat' && <Chat language={language} user={user} />}
+          {activeTab === 'myths' && <MythsAssistant language={language} />}
+          {activeTab === 'profile' && <Profile user={user} language={language} />}
+        </div>
+      </div>
     </div>
   );
 }
