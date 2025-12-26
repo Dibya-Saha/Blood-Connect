@@ -6,6 +6,11 @@ import { createBloodRequest, getMyRequests, cancelRequest } from '../services/re
 interface RequestBloodProps {
   language: 'en' | 'bn';
   user: User;
+  prefillData?: {
+    hospitalName?: string;
+    address?: string;
+    contactPhone?: string;
+  };
 }
 
 interface MyRequest {
@@ -22,7 +27,7 @@ interface MyRequest {
   createdAt: string;
 }
 
-const RequestBlood: React.FC<RequestBloodProps> = ({ language, user }) => {
+const RequestBlood: React.FC<RequestBloodProps> = ({ language, user, prefillData }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -33,14 +38,26 @@ const RequestBlood: React.FC<RequestBloodProps> = ({ language, user }) => {
     bloodGroup: 'A+' as BloodGroup,
     unitsNeeded: 1,
     urgency: 'URGENT' as 'EMERGENCY' | 'URGENT' | 'NORMAL',
-    hospitalName: '',
-    address: '',
-    contactPhone: user.phone || '',
+    hospitalName: prefillData?.hospitalName || '',
+    address: prefillData?.address || '',
+    contactPhone: prefillData?.contactPhone || user.phone || '',
     patientName: '',
     relationship: '',
     additionalNotes: '',
     isThalassemiaPatient: false
   });
+
+  // Update form if prefillData changes
+  useEffect(() => {
+    if (prefillData) {
+      setFormData(prev => ({
+        ...prev,
+        hospitalName: prefillData.hospitalName || prev.hospitalName,
+        address: prefillData.address || prev.address,
+        contactPhone: prefillData.contactPhone || prev.contactPhone
+      }));
+    }
+  }, [prefillData]);
 
   useEffect(() => {
     loadMyRequests();
@@ -313,7 +330,7 @@ const RequestBlood: React.FC<RequestBloodProps> = ({ language, user }) => {
                   <div className="space-y-2">
                     <label className="text-xs font-black text-gray-400 uppercase ml-2">{labels.hospitalName[language]} *</label>
                     <div className="relative">
-                      <Building className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
+                     <Building className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
                       <input 
                         type="text"
                         placeholder="e.g. Dhaka Medical College Hospital"

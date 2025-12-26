@@ -9,9 +9,10 @@ import { fetchAllInventory, fetchCriticalShortagesCount, updateBloodStock } from
 
 interface InventoryProps {
   language: 'en' | 'bn';
+  onNavigateToRequest?: (hospitalInfo: { name: string; address: string; phone: string }) => void;
 }
 
-const Inventory: React.FC<InventoryProps> = ({ language }) => {
+const Inventory: React.FC<InventoryProps> = ({ language, onNavigateToRequest }) => {
   const [rawInventory, setRawInventory] = useState<BloodInventory[]>([]);
   const [criticalCount, setCriticalCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -457,7 +458,19 @@ const Inventory: React.FC<InventoryProps> = ({ language }) => {
                   </td>
                   <td className="px-6 py-5">
                     <div className="flex gap-2">
-                      <button className="p-2 bg-gray-50 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all" title="Request Blood">
+                      <button 
+                        onClick={() => {
+                          if (onNavigateToRequest) {
+                            onNavigateToRequest({
+                              name: item.hospitalName,
+                              address: `${item.city}, ${item.division}`,
+                              phone: item.phone
+                            });
+                          }
+                        }}
+                        className="p-2 bg-gray-50 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all" 
+                        title="Request Blood"
+                      >
                         <ExternalLink size={16} />
                       </button>
                       <button className="p-2 bg-gray-50 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="Update Stock">
