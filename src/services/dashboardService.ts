@@ -1,7 +1,7 @@
 
 import { BloodRequest, BloodGroup } from '../types';
 
-const API_BASE_URL = '/api/dashboard';
+
 
 export interface DashboardStats {
   points: number;
@@ -23,42 +23,49 @@ export interface TrendData {
 /**
  * Fetches dashboard statistics from the Spring Boot backend.
  */
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
 export const fetchDashboardStats = async (): Promise<DashboardStats> => {
-  const response = await fetch(`${API_BASE_URL}/stats`, {
-    headers: {
-      'Authorization': `Bearer ${localStorage.getItem('jwt_token')}`
-    }
-  });
-  if (!response.ok) throw new Error('Failed to fetch stats');
-  return response.json();
+  try {
+    const response = await fetch(`${API_BASE_URL}/dashboard/stats`);
+    if (!response.ok) throw new Error('Failed to fetch stats');
+    return response.json();
+  } catch (error) {
+    console.warn('Using mock data:', error);
+    return getMockDashboardData().stats;
+  }
 };
 
-/**
- * Fetches recent blood requests.
- */
+export const fetchTrends = async (): Promise<TrendData[]> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/dashboard/trends`);
+    if (!response.ok) throw new Error('Failed to fetch trends');
+    const data = await response.json();
+    return data.length > 0 ? data : getMockDashboardData().trends;
+  } catch (error) {
+    console.warn('Using mock data:', error);
+    return getMockDashboardData().trends;
+  }
+};
+
+export const fetchInventoryData = async (): Promise<InventoryStats[]> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/dashboard/inventory`);
+    if (!response.ok) throw new Error('Failed to fetch inventory');
+    const data = await response.json();
+    return data.length > 0 ? data : getMockDashboardData().inventory;
+  } catch (error) {
+    console.warn('Using mock data:', error);
+    return getMockDashboardData().inventory;
+  }
+};
+
 export const fetchRecentRequests = async (): Promise<BloodRequest[]> => {
   const response = await fetch(`${API_BASE_URL}/requests`);
   if (!response.ok) throw new Error('Failed to fetch requests');
   return response.json();
 };
 
-/**
- * Fetches current blood stock inventory.
- */
-export const fetchInventoryData = async (): Promise<InventoryStats[]> => {
-  const response = await fetch(`${API_BASE_URL}/inventory`);
-  if (!response.ok) throw new Error('Failed to fetch inventory');
-  return response.json();
-};
-
-/**
- * Fetches monthly donation trends.
- */
-export const fetchTrends = async (): Promise<TrendData[]> => {
-  const response = await fetch(`${API_BASE_URL}/trends`);
-  if (!response.ok) throw new Error('Failed to fetch trends');
-  return response.json();
-};
 
 // Mock fallback for development if backend is not yet deployed
 // Fix: Added explicit return type to ensure objects match required interfaces.

@@ -1,28 +1,22 @@
 
 import { BloodGroup, BloodInventory } from '../types';
 
-const API_BASE_URL = '/api/inventory';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-/**
- * GET /api/inventory
- * Fetches all blood stock records with full facility metadata.
- */
 export const fetchAllInventory = async (): Promise<BloodInventory[]> => {
   try {
-    const response = await fetch(`${API_BASE_URL}`);
+    const response = await fetch(`${API_BASE_URL}/inventory`);
     if (!response.ok) throw new Error('Backend offline');
     return response.json();
   } catch (e) {
+    console.warn('Using mock data:', e);
     return getMockInventoryData();
   }
 };
 
-/**
- * GET /api/inventory/critical
- */
 export const fetchCriticalShortagesCount = async (): Promise<number> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/critical`);
+    const response = await fetch(`${API_BASE_URL}/inventory/critical`);
     if (!response.ok) throw new Error('API Unavailable');
     const data = await response.json();
     return data.count;
@@ -31,7 +25,6 @@ export const fetchCriticalShortagesCount = async (): Promise<number> => {
     return mock.filter(item => item.status === 'CRITICAL').length;
   }
 };
-
 /**
  * POST /api/inventory/update
  */
