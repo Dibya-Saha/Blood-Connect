@@ -53,7 +53,8 @@ const Dashboard: React.FC<DashboardProps> = ({ language, user, onNavigate }) => 
       try {
         await new Promise(resolve => setTimeout(resolve, 800));
         const mock = getMockDashboardData();
-        setDashboardStats({ ...mock.stats, points: user.points });
+        const stats = await fetchDashboardStats(user.points);
+setDashboardStats(stats);
         setTrends(mock.trends);
         setInventory(mock.inventory);
       } catch (err) {

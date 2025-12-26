@@ -19,7 +19,11 @@ function App() {
   useEffect(() => {
     const savedUser = localStorage.getItem('bloodconnect_current_user');
     if (savedUser) {
-      setUser(JSON.parse(savedUser));
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch (e) {
+        localStorage.removeItem('bloodconnect_current_user');
+      }
     }
   }, []);
 
