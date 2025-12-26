@@ -1,14 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Map, Database, MessageCircle, User as UserIcon, LogOut, Menu, X, Zap } from 'lucide-react';
+import { Heart, Map, Database, MessageCircle, User as UserIcon, LogOut, Menu, X, Zap, Droplet, MessageSquare } from 'lucide-react';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import EmergencyMap from './components/EmergencyMap';
 import Inventory from './components/Inventory';
 import MythsAssistant from './components/MythsAssistant';
 import Profile from './components/Profile';
+import RequestBlood from './components/RequestBlood';
+import Chat from './components/Chat';
 import { User } from './types';
 
-type Tab = 'dashboard' | 'map' | 'inventory' | 'myths' | 'spec' | 'profile';
+type Tab = 'dashboard' | 'map' | 'inventory' | 'myths' | 'profile' | 'request' | 'chat';
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -48,8 +50,10 @@ function App() {
 
   const navItems = [
     { id: 'dashboard' as Tab, label: { en: 'Dashboard', bn: 'ড্যাশবোর্ড' }, icon: Heart },
+    { id: 'request' as Tab, label: { en: 'Request Blood', bn: 'রক্তের অনুরোধ' }, icon: Droplet },
     { id: 'map' as Tab, label: { en: 'Emergency Map', bn: 'জরুরী ম্যাপ' }, icon: Map },
     { id: 'inventory' as Tab, label: { en: 'Inventory', bn: 'ইনভেন্টরি' }, icon: Database },
+    { id: 'chat' as Tab, label: { en: 'Messages', bn: 'বার্তা' }, icon: MessageSquare },
     { id: 'myths' as Tab, label: { en: 'AI Assistant', bn: 'এআই সহায়ক' }, icon: MessageCircle },
     { id: 'profile' as Tab, label: { en: 'Profile', bn: 'প্রোফাইল' }, icon: UserIcon },
   ];
@@ -159,8 +163,10 @@ function App() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'dashboard' && <Dashboard language={language} user={user} onNavigate={setActiveTab} />}
+        {activeTab === 'request' && <RequestBlood language={language} user={user} />}
         {activeTab === 'map' && <EmergencyMap language={language} />}
         {activeTab === 'inventory' && <Inventory language={language} />}
+        {activeTab === 'chat' && <Chat language={language} user={user} />}
         {activeTab === 'myths' && <MythsAssistant language={language} />}
         {activeTab === 'profile' && <Profile user={user} language={language} />}
       </main>

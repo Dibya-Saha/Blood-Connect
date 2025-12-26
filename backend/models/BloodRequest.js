@@ -44,6 +44,18 @@ const bloodRequestSchema = new mongoose.Schema({
     enum: ['OPEN', 'FULFILLED', 'CANCELLED'],
     default: 'OPEN'
   },
+  patientName: {
+    type: String,
+    default: ''
+  },
+  relationship: {
+    type: String,
+    default: ''
+  },
+  additionalNotes: {
+    type: String,
+    default: ''
+  },
   isThalassemiaPatient: {
     type: Boolean,
     default: false
@@ -65,6 +77,7 @@ const bloodRequestSchema = new mongoose.Schema({
 // Index for faster queries
 bloodRequestSchema.index({ status: 1, urgency: -1 });
 bloodRequestSchema.index({ bloodGroup: 1, status: 1 });
+bloodRequestSchema.index({ requestedBy: 1 });
 
 const BloodRequest = mongoose.model('BloodRequest', bloodRequestSchema);
 

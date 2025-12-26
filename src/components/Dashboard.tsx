@@ -16,7 +16,7 @@ import {
 interface DashboardProps {
   language: 'en' | 'bn';
   user: User;
-  onNavigate: (tab: 'dashboard' | 'map' | 'inventory' | 'myths' | 'spec' | 'profile') => void;
+  onNavigate: (tab: 'dashboard' | 'map' | 'inventory' | 'myths' | 'profile' | 'request' | 'chat') => void;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ language, user, onNavigate }) => {
