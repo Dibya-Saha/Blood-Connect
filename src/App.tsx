@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Map, Database, MessageCircle, User as UserIcon, LogOut, Menu, X, Zap, Droplet, MessageSquare } from 'lucide-react';
+import { Heart, Map, Database, MessageCircle, User as UserIcon, LogOut, Menu, X, Zap, Droplet, MessageSquare, Calendar } from 'lucide-react';
 import Auth from './components/Auth';
 import Dashboard from './components/Dashboard';
 import EmergencyMap from './components/EmergencyMap';
@@ -8,9 +8,11 @@ import MythsAssistant from './components/MythsAssistant';
 import Profile from './components/Profile';
 import RequestBlood from './components/RequestBlood';
 import Chat from './components/Chat';
-import { User } from './types';
+import Appointments from './components/Appointments';
+import AppointmentBooking from './components/AppointmentBooking';
+import { User, BloodGroup } from './types';
 
-type Tab = 'dashboard' | 'map' | 'inventory' | 'myths' | 'profile' | 'request' | 'chat';
+type Tab = 'dashboard' | 'map' | 'inventory' | 'myths' | 'profile' | 'request' | 'chat' | 'appointments' | 'book-appointment';
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -22,6 +24,13 @@ function App() {
     address?: string;
     contactPhone?: string;
   } | undefined>(undefined);
+  const [appointmentPrefillData, setAppointmentPrefillData] = useState<{
+    hospitalId?: string;
+    hospitalName?: string;
+    hospitalAddress?: string;
+    hospitalPhone?: string;
+    bloodGroup?: BloodGroup;
+  } | undefined>(undefined);
 
   const handleNavigateToRequest = (hospitalInfo: { name: string; address: string; phone: string }) => {
     setRequestPrefillData({
@@ -30,6 +39,17 @@ function App() {
       contactPhone: hospitalInfo.phone
     });
     setActiveTab('request');
+  };
+
+  const handleNavigateToAppointment = (data: {
+    hospitalId: string;
+    hospitalName: string;
+    hospitalAddress: string;
+    hospitalPhone: string;
+    bloodGroup: BloodGroup;
+  }) => {
+    setAppointmentPrefillData(data);
+    setActiveTab('book-appointment');
   };
 
   useEffect(() => {
@@ -51,6 +71,7 @@ function App() {
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('bloodconnect_current_user');
+    localStorage.removeItem('jwt_token');
     setActiveTab('dashboard');
   };
 
@@ -65,6 +86,7 @@ function App() {
   const navItems = [
     { id: 'dashboard' as Tab, label: { en: 'Dashboard', bn: 'ড্যাশবোর্ড' }, icon: Heart },
     { id: 'request' as Tab, label: { en: 'Request Blood', bn: 'রক্তের অনুরোধ' }, icon: Droplet },
+    { id: 'appointments' as Tab, label: { en: 'Appointments', bn: 'অ্যাপয়েন্টমেন্ট' }, icon: Calendar },
     { id: 'map' as Tab, label: { en: 'Emergency Map', bn: 'জরুরী ম্যাপ' }, icon: Map },
     { id: 'inventory' as Tab, label: { en: 'Inventory', bn: 'ইনভেন্টরি' }, icon: Database },
     { id: 'chat' as Tab, label: { en: 'Messages', bn: 'বার্তা' }, icon: MessageSquare },
@@ -178,8 +200,24 @@ function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'dashboard' && <Dashboard language={language} user={user} onNavigate={setActiveTab} />}
         {activeTab === 'request' && <RequestBlood language={language} user={user} prefillData={requestPrefillData} />}
+        {activeTab === 'appointments' && <Appointments language={language} user={user} />}
+        {activeTab === 'book-appointment' && (
+          <AppointmentBooking 
+            language={language} 
+            user={user} 
+            prefillData={appointmentPrefillData}
+            onSuccess={() => setActiveTab('appointments')}
+          />
+        )}
         {activeTab === 'map' && <EmergencyMap language={language} />}
-        {activeTab === 'inventory' && <Inventory language={language} user={user} onNavigateToRequest={handleNavigateToRequest} />}
+        {activeTab === 'inventory' && (
+          <Inventory 
+            language={language} 
+            user={user} 
+            onNavigateToRequest={handleNavigateToRequest}
+            onNavigateToAppointment={handleNavigateToAppointment}
+          />
+        )}
         {activeTab === 'chat' && <Chat language={language} user={user} />}
         {activeTab === 'myths' && <MythsAssistant language={language} />}
         {activeTab === 'profile' && <Profile user={user} language={language} />}

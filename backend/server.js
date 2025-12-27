@@ -12,6 +12,8 @@ import dashboardRoutes from './routes/dashboard.js';
 import notificationRoutes from './routes/notifications.js';
 import chatRoutes from './routes/chat.js';
 
+import appointmentRoutes from './routes/appointments.js';
+
 // Load environment variables
 dotenv.config();
 
@@ -42,6 +44,8 @@ app.use('/api/requests', requestRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/appointments', appointmentRoutes);
+
 
 // Health check route
 app.get('/api/health', (req, res) => {

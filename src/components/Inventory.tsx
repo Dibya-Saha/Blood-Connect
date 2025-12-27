@@ -6,10 +6,18 @@ import {
 } from 'lucide-react';
 import { BloodGroup, User } from '../types';
 
+
 interface InventoryProps {
   language: 'en' | 'bn';
   user: User;
   onNavigateToRequest?: (hospitalInfo: { name: string; address: string; phone: string }) => void;
+  onNavigateToAppointment?: (data: {
+    hospitalId: string;
+    hospitalName: string;
+    hospitalAddress: string;
+    hospitalPhone: string;
+    bloodGroup: BloodGroup;
+  }) => void;
 }
 
 interface Hospital {
@@ -36,7 +44,8 @@ interface DonateModalData {
   bloodGroup: BloodGroup;
 }
 
-const Inventory: React.FC<InventoryProps> = ({ language, user, onNavigateToRequest }) => {
+const Inventory: React.FC<InventoryProps> = ({ language, user, onNavigateToRequest, onNavigateToAppointment }) => {
+  
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -110,43 +119,20 @@ const Inventory: React.FC<InventoryProps> = ({ language, user, onNavigateToReque
   }, [hospitals]);
 
   const handleDonate = async () => {
-    if (!donateModal) return;
+  if (!donateModal) return;
 
-    setDonating(true);
-    try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const token = localStorage.getItem('jwt_token');
-
-      const response = await fetch(`${API_URL}/inventory/donate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        },
-        body: JSON.stringify({
-          hospitalId: donateModal.hospital.id,
-          bloodGroup: donateModal.bloodGroup,
-          donorId: user.id
-        })
-      });
-
-      if (response.ok) {
-        setDonateSuccess(true);
-        setTimeout(() => {
-          setDonateModal(null);
-          setDonateSuccess(false);
-          fetchData();
-        }, 2000);
-      } else {
-        alert(language === 'en' ? 'Failed to record donation' : 'দান রেকর্ড করতে ব্যর্থ');
-      }
-    } catch (error) {
-      console.error('Donate error:', error);
-      alert(language === 'en' ? 'Error recording donation' : 'দান রেকর্ড করতে ত্রুটি');
-    } finally {
-      setDonating(false);
-    }
-  };
+  // Instead of direct donation, navigate to create appointment
+  setDonateModal(null);
+  if (onNavigateToAppointment) {
+    onNavigateToAppointment({
+      hospitalId: donateModal.hospital.id,
+      hospitalName: donateModal.hospital.name,
+      hospitalAddress: `${donateModal.hospital.city}, ${donateModal.hospital.division}`,
+      hospitalPhone: donateModal.hospital.phone,
+      bloodGroup: donateModal.bloodGroup
+    });
+  }
+};
 
   const bloodColors: Record<BloodGroup, string> = {
     'A+': 'bg-blue-600', 'A-': 'bg-blue-400',
