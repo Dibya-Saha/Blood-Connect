@@ -10,6 +10,25 @@ const router = express.Router();
 router.use(authMiddleware);
 router.use(requireAuth);
 
+// @route   GET /api/chat/users
+// @desc    Get all users for chat (excluding current user)
+// @access  Private
+router.get('/users', async (req, res) => {
+  try {
+    const users = await User.find({ 
+      _id: { $ne: req.user.id },
+      role: 'DONOR' 
+    })
+    .select('name email bloodGroup district phone isAvailable points')
+    .sort({ name: 1 });
+
+    res.json(users);
+  } catch (error) {
+    console.error('Get users error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // @route   GET /api/chat/conversations
 // @desc    Get all conversations for current user
 // @access  Private
@@ -18,7 +37,7 @@ router.get('/conversations', async (req, res) => {
     const conversations = await Conversation.find({
       participants: req.user.id
     })
-    .populate('participants', 'name email bloodGroup')
+    .populate('participants', 'name email bloodGroup district phone')
     .populate('lastMessage')
     .sort({ updatedAt: -1 });
 
@@ -26,6 +45,11 @@ router.get('/conversations', async (req, res) => {
     const formattedConversations = await Promise.all(
       conversations.map(async (conv) => {
         const otherUser = conv.participants.find(p => p._id.toString() !== req.user.id);
+        
+        if (!otherUser) {
+          return null;
+        }
+
         const unreadCount = await Message.countDocuments({
           conversation: conv._id,
           receiver: req.user.id,
@@ -39,6 +63,8 @@ router.get('/conversations', async (req, res) => {
             name: otherUser.name,
             email: otherUser.email,
             bloodGroup: otherUser.bloodGroup,
+            district: otherUser.district,
+            phone: otherUser.phone,
             isOnline: false // Can be enhanced with socket.io
           },
           lastMessage: conv.lastMessage ? {
@@ -51,7 +77,10 @@ router.get('/conversations', async (req, res) => {
       })
     );
 
-    res.json(formattedConversations);
+    // Filter out null values (conversations where other user was deleted)
+    const validConversations = formattedConversations.filter(conv => conv !== null);
+
+    res.json(validConversations);
   } catch (error) {
     console.error('Get conversations error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -69,11 +98,22 @@ router.post('/conversations', async (req, res) => {
       return res.status(400).json({ message: 'Other user ID is required' });
     }
 
+    // Verify other user exists
+    const otherUser = await User.findById(otherUserId);
+    if (!otherUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Check if user is trying to chat with themselves
+    if (otherUserId === req.user.id) {
+      return res.status(400).json({ message: 'Cannot create conversation with yourself' });
+    }
+
     // Check if conversation already exists
     let conversation = await Conversation.findOne({
       participants: { $all: [req.user.id, otherUserId] }
     })
-    .populate('participants', 'name email bloodGroup')
+    .populate('participants', 'name email bloodGroup district phone')
     .populate('lastMessage');
 
     if (!conversation) {
@@ -82,18 +122,20 @@ router.post('/conversations', async (req, res) => {
         participants: [req.user.id, otherUserId]
       });
       await conversation.save();
-      await conversation.populate('participants', 'name email bloodGroup');
+      await conversation.populate('participants', 'name email bloodGroup district phone');
     }
 
-    const otherUser = conversation.participants.find(p => p._id.toString() !== req.user.id);
+    const otherUserData = conversation.participants.find(p => p._id.toString() !== req.user.id);
     
     res.json({
       id: conversation._id,
       otherUser: {
-        id: otherUser._id,
-        name: otherUser.name,
-        email: otherUser.email,
-        bloodGroup: otherUser.bloodGroup,
+        id: otherUserData._id,
+        name: otherUserData.name,
+        email: otherUserData.email,
+        bloodGroup: otherUserData.bloodGroup,
+        district: otherUserData.district,
+        phone: otherUserData.phone,
         isOnline: false
       },
       lastMessage: conversation.lastMessage ? {
@@ -182,8 +224,9 @@ router.post('/conversations/:id/messages', async (req, res) => {
 
     await message.save();
 
-    // Update conversation's last message
+    // Update conversation's last message and timestamp
     conversation.lastMessage = message._id;
+    conversation.updatedAt = new Date();
     await conversation.save();
 
     res.status(201).json({
@@ -206,6 +249,17 @@ router.post('/conversations/:id/messages', async (req, res) => {
 // @access  Private
 router.put('/conversations/:id/read', async (req, res) => {
   try {
+    const conversation = await Conversation.findById(req.params.id);
+
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversation not found' });
+    }
+
+    // Verify user is participant
+    if (!conversation.participants.includes(req.user.id)) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+
     await Message.updateMany(
       {
         conversation: req.params.id,

@@ -7,6 +7,7 @@ export type StockStatus = 'CRITICAL' | 'LOW' | 'OPTIMAL';
 export type UrgencyLevel = 'EMERGENCY' | 'URGENT' | 'NORMAL';
 
 export interface User {
+  _id?: string;
   id: string;
   name: string;
   email: string;

@@ -30,7 +30,7 @@ export interface Message {
 }
 
 export interface ChatUser {
-  id: string;
+  _id: string;  // Changed from id to _id
   name: string;
   email: string;
   bloodGroup: string;
@@ -47,7 +47,7 @@ export const getAllUsers = async (): Promise<ChatUser[]> => {
   const token = localStorage.getItem('jwt_token');
   
   try {
-    const response = await fetch(`${API_URL}/users`, {
+    const response = await fetch(`${API_URL}/chat/users`, {
       headers: {
         ...(token && { 'Authorization': `Bearer ${token}` })
       }

@@ -73,16 +73,18 @@ const Chat: React.FC<ChatProps> = ({ language, user }) => {
     }
   };
 
-  const loadAllUsers = async () => {
-    try {
-      const data = await getAllUsers();
-      const filteredUsers = data.filter(u => u.id !== user.id);
-      setAllUsers(filteredUsers);
-    } catch (error) {
-      console.error('Load users error:', error);
-    }
-  };
-
+const loadAllUsers = async () => {
+  try {
+    const data = await getAllUsers();
+    console.log('Fetched users:', data); // Debug log
+    console.log('Current user ID:', user.id); // Debug log
+   const filteredUsers = data.filter(u => u._id !== user._id);  // Changed id to _id
+    console.log('Filtered users:', filteredUsers); // Debug log
+    setAllUsers(filteredUsers);
+  } catch (error) {
+    console.error('Load users error:', error);
+  }
+};
   const loadMessages = async (conversationId: string) => {
     try {
       const data = await getMessages(conversationId);
@@ -103,7 +105,7 @@ const Chat: React.FC<ChatProps> = ({ language, user }) => {
   const handleStartChat = async (chatUser: ChatUser) => {
     try {
       setLoading(true);
-      const conversation = await createConversation(chatUser.id);
+      const conversation = await createConversation(chatUser._id);
       setSelectedConversation(conversation);
       await loadMessages(conversation.id);
       await loadConversations();
@@ -314,7 +316,7 @@ const Chat: React.FC<ChatProps> = ({ language, user }) => {
             </div>
           ) : (
             filteredUsers.map(chatUser => (
-              <UserCard key={chatUser.id} chatUser={chatUser} />
+              <UserCard key={chatUser._id} chatUser={chatUser} />
             ))
           )}
         </div>
@@ -480,7 +482,8 @@ const Chat: React.FC<ChatProps> = ({ language, user }) => {
                 </div>
               ) : (
                 messages.map((msg, index) => {
-                  const isOwn = msg.senderId === user.id;
+                  
+const isOwn = msg.senderId === user._id;
                   const showDate = index === 0 || 
                     new Date(messages[index - 1].timestamp).toDateString() !== new Date(msg.timestamp).toDateString();
 
