@@ -35,7 +35,7 @@ npm install d3
 
 # backend .env file should contain:
 
-MONGODB_URI=mongodb+srv://ajmainfayekdiganta_db_user:qDwEeSWvM6pxPiSx@bloodconnect.6jado0c.mongodb.net/?appName=bloodconnect
+MONGODB_URI=
 
 JWT_SECRET=kdsjfK32dksldfsksdAd323lksdkskskfsdkjieksjio232klSDFWEsjfeisakdjiweksjdei
 
