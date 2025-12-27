@@ -42,6 +42,7 @@ export interface BloodRequest {
   };
   contactPhone: string;
   status: 'OPEN' | 'FULFILLED' | 'CANCELLED';
+   createdAt?: string;
   timestamp: string;
   isThalassemiaPatient?: boolean;
 }

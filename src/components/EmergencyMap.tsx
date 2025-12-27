@@ -16,17 +16,7 @@ declare module 'leaflet' {
   function polylineDecorator(polyline: any, options?: any): any;
 }
 
-const getTimeAgo = (timestamp: string) => {
-  const now = Date.now();
-  const then = new Date(timestamp).getTime();
-  const diff = Math.floor((now - then) / 1000);
-  
-  if (diff < 60) return `${diff} sec ago`;
-  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
-  if (diff < 2592000) return `${Math.floor(diff / 86400)} days ago`;
-  return new Date(timestamp).toLocaleDateString();
-};
+
 
 const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -40,7 +30,20 @@ const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<BloodRequest | null>(null);
   const [routeData, setRouteData] = useState<{distance: number, duration: number} | null>(null);
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
+const getTimeAgo = (timestamp: string) => {
+  const now = currentTime; // Use state instead of Date.now()
+  const then = new Date(timestamp).getTime();
+  const diff = Math.floor((now - then) / 1000);
+  
+  if (diff < 30) return 'Just now';
+  if (diff < 60) return `${diff} sec ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} hrs ago`;
+  if (diff < 2592000) return `${Math.floor(diff / 86400)} days ago`;
+  return new Date(timestamp).toLocaleDateString();
+};
   // Fetch requests from database
   const fetchRequests = async () => {
     try {
@@ -144,6 +147,15 @@ const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
       renderMarkers();
     }
   }, [requests]);
+
+  // Update time every minute for relative timestamps
+useEffect(() => {
+  const timer = setInterval(() => {
+    setCurrentTime(Date.now());
+  }, 60000); // Update every 60 seconds
+  
+  return () => clearInterval(timer);
+}, []);
 
   const renderMarkers = () => {
     if (!markersLayer.current) return;
@@ -540,7 +552,8 @@ const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
                     {req.urgency === 'EMERGENCY' ? (language === 'en' ? 'EMERGENCY' : 'জরুরী') : (language === 'en' ? 'NORMAL' : 'সাধারণ')}
                   </span>
                   <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1 uppercase">
-                    <Clock size={12} /> {req.timestamp ? getTimeAgo(req.timestamp) : 'Just now'}
+                   <Clock size={12} /> {req.createdAt ? getTimeAgo(req.createdAt) : 'Just now'}
+                  
                   </span>
                 </div>
                 
