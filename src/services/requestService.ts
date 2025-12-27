@@ -13,6 +13,10 @@ interface CreateRequestData {
   relationship?: string;
   additionalNotes?: string;
   isThalassemiaPatient: boolean;
+  location: {
+    lat: number;
+    lng: number;
+  };
 }
 
 /**
@@ -33,8 +37,8 @@ export const createBloodRequest = async (data: CreateRequestData) => {
       urgency: data.urgency,
       hospitalName: data.hospitalName,
       location: {
-        lat: 23.8103, // Default Dhaka coordinates - can be enhanced with geolocation
-        lng: 90.4125,
+        lat: data.location?.lat || 23.8103, // Use provided coordinates or default to Dhaka
+        lng: data.location?.lng || 90.4125,
         address: data.address
       },
       contactPhone: data.contactPhone,

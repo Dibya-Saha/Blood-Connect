@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Droplet, MapPin, Phone, Clock, AlertTriangle, Send, CheckCircle2, X, Calendar, Building, User as UserIcon, Navigation2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Droplet, MapPin, Phone, Clock, AlertTriangle, Send, CheckCircle2, X, Calendar, Building, User as UserIcon, Navigation2, Search, Crosshair } from 'lucide-react';
 import { BloodGroup, User } from '../types';
 import { createBloodRequest, getMyRequests, cancelRequest } from '../services/requestService';
+
+declare const L: any;
 
 interface RequestBloodProps {
   language: 'en' | 'bn';
@@ -44,8 +46,18 @@ const RequestBlood: React.FC<RequestBloodProps> = ({ language, user, prefillData
     patientName: '',
     relationship: '',
     additionalNotes: '',
-    isThalassemiaPatient: false
+    isThalassemiaPatient: false,
+    location: {
+      lat: 0,
+      lng: 0
+    }
   });
+
+  const [geocodingAddress, setGeocodingAddress] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const mapRef = useRef<HTMLDivElement>(null);
+  const leafletMap = useRef<any>(null);
+  const marker = useRef<any>(null);
 
   // Update form if prefillData changes
   useEffect(() => {
@@ -62,6 +74,204 @@ const RequestBlood: React.FC<RequestBloodProps> = ({ language, user, prefillData
   useEffect(() => {
     loadMyRequests();
   }, []);
+
+  // Geocode address to get coordinates
+  const geocodeAddress = async (address: string) => {
+    if (!address.trim()) {
+      setErrorMsg(language === 'en' ? 'Please enter an address first' : 'অনুগ্রহ করে প্রথমে একটি ঠিকানা লিখুন');
+      return;
+    }
+
+    setGeocodingAddress(true);
+    setErrorMsg(null);
+
+    try {
+      // Use Nominatim (OpenStreetMap) geocoding service - free and no API key needed
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ', Bangladesh')}&limit=1`,
+        {
+          headers: {
+            'User-Agent': 'BloodConnect App'
+          }
+        }
+      );
+
+      const data = await response.json();
+
+      if (data && data.length > 0) {
+        const lat = parseFloat(data[0].lat);
+        const lng = parseFloat(data[0].lon);
+        
+        setFormData(prev => ({
+          ...prev,
+          location: { lat, lng }
+        }));
+
+        // Update map if open
+        if (showMapPicker && leafletMap.current) {
+          updateMapMarker(lat, lng);
+        }
+      } else {
+        throw new Error(language === 'en' 
+          ? 'Could not find this location. Please try a more specific address or use the map picker.' 
+          : 'এই অবস্থান পাওয়া যায়নি। অনুগ্রহ করে আরও নির্দিষ্ট ঠিকানা ব্যবহার করুন বা মানচিত্র নির্বাচক ব্যবহার করুন।');
+      }
+    } catch (error: any) {
+      setErrorMsg(error.message || (language === 'en' 
+        ? 'Failed to geocode address. Please try using the map picker.' 
+        : 'ঠিকানা জিওকোড করতে ব্যর্থ। অনুগ্রহ করে মানচিত্র নির্বাচক ব্যবহার করুন।'));
+    } finally {
+      setGeocodingAddress(false);
+    }
+  };
+
+  // Use current location for hospital
+  const useCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setErrorMsg(language === 'en' 
+        ? 'Geolocation is not supported by your browser' 
+        : 'আপনার ব্রাউজার দ্বারা জিওলোকেশন সমর্থিত নয়');
+      return;
+    }
+
+    setGeocodingAddress(true);
+    setErrorMsg(null);
+    
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        
+        setFormData(prev => ({
+          ...prev,
+          location: { lat, lng }
+        }));
+
+        // Reverse geocode to get address
+        fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+          {
+            headers: {
+              'User-Agent': 'BloodConnect App'
+            }
+          }
+        )
+          .then(res => res.json())
+          .then(data => {
+            if (data.display_name) {
+              setFormData(prev => ({
+                ...prev,
+                address: data.display_name.split(',').slice(0, 3).join(',').trim()
+              }));
+            }
+          })
+          .catch(() => {});
+
+        if (showMapPicker && leafletMap.current) {
+          updateMapMarker(lat, lng);
+        }
+        
+        setGeocodingAddress(false);
+      },
+      (error) => {
+        setErrorMsg(language === 'en' 
+          ? 'Could not get your location. Please enable location access or use the map picker.' 
+          : 'আপনার অবস্থান পাওয়া যায়নি। অনুগ্রহ করে অবস্থান অ্যাক্সেস সক্ষম করুন বা মানচিত্র নির্বাচক ব্যবহার করুন।');
+        setGeocodingAddress(false);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000
+      }
+    );
+  };
+
+  // Update map marker
+  const updateMapMarker = React.useCallback((lat: number, lng: number) => {
+    if (!leafletMap.current) return;
+
+    if (marker.current) {
+      leafletMap.current.removeLayer(marker.current);
+    }
+
+    const icon = L.divIcon({
+      className: 'hospital-location-marker',
+      html: `<div style="width: 30px; height: 30px; background: #dc2626; border: 4px solid white; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); box-shadow: 0 4px 15px rgba(220, 38, 38, 0.6);"></div>`,
+      iconSize: [30, 30],
+      iconAnchor: [15, 30]
+    });
+
+    marker.current = L.marker([lat, lng], { icon })
+      .addTo(leafletMap.current)
+      .bindPopup(`<div class="p-2"><strong>${language === 'en' ? 'Hospital Location' : 'হাসপাতালের অবস্থান'}</strong><br>${lat.toFixed(6)}, ${lng.toFixed(6)}</div>`)
+      .openPopup();
+
+    leafletMap.current.setView([lat, lng], 15);
+  }, [language]);
+
+  // Initialize map picker
+  useEffect(() => {
+    if (!showMapPicker || !mapRef.current || leafletMap.current) return;
+
+    // Initialize map
+    leafletMap.current = L.map(mapRef.current).setView([23.8103, 90.4125], 13);
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+      subdomains: 'abcd',
+      maxZoom: 20
+    }).addTo(leafletMap.current);
+
+    // Add click handler to set location
+    const handleMapClick = (e: any) => {
+      const lat = e.latlng.lat;
+      const lng = e.latlng.lng;
+      
+      setFormData(prev => ({
+        ...prev,
+        location: { lat, lng }
+      }));
+
+      updateMapMarker(lat, lng);
+
+      // Reverse geocode
+      fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`,
+        {
+          headers: {
+            'User-Agent': 'BloodConnect App'
+          }
+        }
+      )
+        .then(res => res.json())
+        .then(data => {
+          if (data.display_name) {
+            setFormData(prev => ({
+              ...prev,
+              address: data.display_name.split(',').slice(0, 3).join(',').trim()
+            }));
+          }
+        })
+        .catch(() => {});
+    };
+
+    leafletMap.current.on('click', handleMapClick);
+
+    // If location is already set, show marker
+    if (formData.location.lat !== 0 && formData.location.lng !== 0) {
+      setTimeout(() => {
+        updateMapMarker(formData.location.lat, formData.location.lng);
+      }, 100);
+    }
+
+    return () => {
+      if (leafletMap.current) {
+        leafletMap.current.off('click', handleMapClick);
+        leafletMap.current.remove();
+        leafletMap.current = null;
+      }
+    };
+  }, [showMapPicker, updateMapMarker, formData.location.lat, formData.location.lng]);
 
   const loadMyRequests = async () => {
     try {
@@ -93,6 +303,11 @@ const RequestBlood: React.FC<RequestBloodProps> = ({ language, user, prefillData
       if (formData.unitsNeeded < 1 || formData.unitsNeeded > 10) {
         throw new Error(language === 'en' ? 'Units needed must be between 1-10' : 'ইউনিট ১-১০ এর মধ্যে হতে হবে');
       }
+      if (formData.location.lat === 0 || formData.location.lng === 0) {
+        throw new Error(language === 'en' 
+          ? 'Please set the hospital location by clicking "Find Location" or using the map picker' 
+          : 'অনুগ্রহ করে "অবস্থান খুঁজুন" ক্লিক করে বা মানচিত্র নির্বাচক ব্যবহার করে হাসপাতালের অবস্থান সেট করুন');
+      }
 
       await createBloodRequest(formData);
       
@@ -108,8 +323,15 @@ const RequestBlood: React.FC<RequestBloodProps> = ({ language, user, prefillData
         additionalNotes: '',
         unitsNeeded: 1,
         urgency: 'URGENT',
-        isThalassemiaPatient: false
+        isThalassemiaPatient: false,
+        location: { lat: 0, lng: 0 }
       });
+
+      // Clear map marker if picker is open
+      if (marker.current && leafletMap.current) {
+        leafletMap.current.removeLayer(marker.current);
+        marker.current = null;
+      }
 
       // Reload requests
       loadMyRequests();
@@ -150,6 +372,12 @@ const RequestBlood: React.FC<RequestBloodProps> = ({ language, user, prefillData
     urgency: { en: 'Urgency Level', bn: 'জরুরী স্তর' },
     hospitalName: { en: 'Hospital Name', bn: 'হাসপাতালের নাম' },
     address: { en: 'Hospital Address', bn: 'হাসপাতালের ঠিকানা' },
+    findLocation: { en: 'Find Location', bn: 'অবস্থান খুঁজুন' },
+    useMyLocation: { en: 'Use My Location', bn: 'আমার অবস্থান ব্যবহার করুন' },
+    showMap: { en: 'Pick on Map', bn: 'মানচিত্রে নির্বাচন করুন' },
+    hideMap: { en: 'Hide Map', bn: 'মানচিত্র লুকান' },
+    locationSet: { en: 'Location Set', bn: 'অবস্থান সেট করা হয়েছে' },
+    locationRequired: { en: 'Location required to calculate distance', bn: 'দূরত্ব গণনা করতে অবস্থান প্রয়োজন' },
     contactPhone: { en: 'Contact Phone', bn: 'যোগাযোগের ফোন' },
     additionalNotes: { en: 'Additional Notes', bn: 'অতিরিক্ত নোট' },
     thalassemia: { en: 'Thalassemia Patient', bn: 'থ্যালাসেমিয়া রোগী' },
@@ -354,6 +582,65 @@ const RequestBlood: React.FC<RequestBloodProps> = ({ language, user, prefillData
                         onChange={(e) => setFormData({...formData, address: e.target.value})}
                       />
                     </div>
+                    
+                    {/* Location Buttons */}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => geocodeAddress(formData.address)}
+                        disabled={geocodingAddress || !formData.address.trim()}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                      >
+                        <Search size={16} />
+                        {geocodingAddress ? (language === 'en' ? 'Searching...' : 'খুঁজছি...') : labels.findLocation[language]}
+                      </button>
+                      
+                      <button
+                        type="button"
+                        onClick={useCurrentLocation}
+                        disabled={geocodingAddress}
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95"
+                      >
+                        <Crosshair size={16} />
+                        {labels.useMyLocation[language]}
+                      </button>
+                      
+                      <button
+                        type="button"
+                        onClick={() => setShowMapPicker(!showMapPicker)}
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-bold hover:bg-purple-700 transition-all active:scale-95"
+                      >
+                        <MapPin size={16} />
+                        {showMapPicker ? labels.hideMap[language] : labels.showMap[language]}
+                      </button>
+                    </div>
+
+                    {/* Location Status */}
+                    {formData.location.lat !== 0 && formData.location.lng !== 0 ? (
+                      <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-xl">
+                        <CheckCircle2 className="text-green-600" size={18} />
+                        <span className="text-xs font-bold text-green-800">
+                          {labels.locationSet[language]}: {formData.location.lat.toFixed(6)}, {formData.location.lng.toFixed(6)}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded-xl">
+                        <AlertTriangle className="text-yellow-600" size={18} />
+                        <span className="text-xs font-bold text-yellow-800">{labels.locationRequired[language]}</span>
+                      </div>
+                    )}
+
+                    {/* Map Picker */}
+                    {showMapPicker && (
+                      <div className="mt-4">
+                        <div ref={mapRef} className="w-full h-64 rounded-2xl border-2 border-gray-200 overflow-hidden"></div>
+                        <p className="text-xs text-gray-500 mt-2 font-medium">
+                          {language === 'en' 
+                            ? 'Click on the map to set the hospital location' 
+                            : 'হাসপাতালের অবস্থান সেট করতে মানচিত্রে ক্লিক করুন'}
+                        </p>
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <label className="text-xs font-black text-gray-400 uppercase ml-2">{labels.contactPhone[language]} *</label>
