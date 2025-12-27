@@ -179,7 +179,7 @@ function App() {
         {activeTab === 'dashboard' && <Dashboard language={language} user={user} onNavigate={setActiveTab} />}
         {activeTab === 'request' && <RequestBlood language={language} user={user} prefillData={requestPrefillData} />}
         {activeTab === 'map' && <EmergencyMap language={language} />}
-        {activeTab === 'inventory' && <Inventory language={language} onNavigateToRequest={handleNavigateToRequest} />}
+        {activeTab === 'inventory' && <Inventory language={language} user={user} onNavigateToRequest={handleNavigateToRequest} />}
         {activeTab === 'chat' && <Chat language={language} user={user} />}
         {activeTab === 'myths' && <MythsAssistant language={language} />}
         {activeTab === 'profile' && <Profile user={user} language={language} />}

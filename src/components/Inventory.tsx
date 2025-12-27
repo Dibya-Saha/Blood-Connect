@@ -1,41 +1,68 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Database, Plus, Search, Filter, AlertCircle, RefreshCw, Clock, 
+  Database, Search, Filter, AlertCircle, RefreshCw, Clock, 
   MapPin, Phone, Mail, Building2, ShieldAlert, CheckCircle2, 
-  ChevronRight, Download, FileText, ExternalLink, Activity
+  ChevronRight, Download, FileText, ExternalLink, Activity, X, Droplet, Heart
 } from 'lucide-react';
-import { BloodGroup, BloodInventory, FacilityType } from '../types';
-import { fetchAllInventory, fetchCriticalShortagesCount, updateBloodStock } from '../services/inventoryService';
+import { BloodGroup, User } from '../types';
 
 interface InventoryProps {
   language: 'en' | 'bn';
+  user: User;
   onNavigateToRequest?: (hospitalInfo: { name: string; address: string; phone: string }) => void;
 }
 
-const Inventory: React.FC<InventoryProps> = ({ language, onNavigateToRequest }) => {
-  const [rawInventory, setRawInventory] = useState<BloodInventory[]>([]);
-  const [criticalCount, setCriticalCount] = useState(0);
+interface Hospital {
+  id: string;
+  name: string;
+  type: 'GOVERNMENT' | 'PRIVATE' | 'THALASSEMIA_CENTER';
+  city: string;
+  division: string;
+  phone: string;
+  email: string;
+  is247: boolean;
+  bloodStock: {
+    [key in BloodGroup]: {
+      quantity: number;
+      status: 'CRITICAL' | 'LOW' | 'OPTIMAL';
+      expiryDate: string;
+    };
+  };
+  lastUpdated: string;
+}
+
+interface DonateModalData {
+  hospital: Hospital;
+  bloodGroup: BloodGroup;
+}
+
+const Inventory: React.FC<InventoryProps> = ({ language, user, onNavigateToRequest }) => {
+  const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [lastSynced, setLastSynced] = useState<Date>(new Date());
   const [filterCity, setFilterCity] = useState('All');
   const [filterType, setFilterType] = useState('All');
-  const [filterBlood, setFilterBlood] = useState('All');
-  const [sortBy, setSortBy] = useState<'status' | 'updated'>('status');
-  const [notifying, setNotifying] = useState(false);
-  const [notifySuccess, setNotifySuccess] = useState<string | null>(null);
+  const [donateModal, setDonateModal] = useState<DonateModalData | null>(null);
+  const [donating, setDonating] = useState(false);
+  const [donateSuccess, setDonateSuccess] = useState(false);
 
   const fetchData = async () => {
     try {
-      const [inventoryData, count] = await Promise.all([
-        fetchAllInventory(),
-        fetchCriticalShortagesCount()
-      ]);
-      setRawInventory(inventoryData);
-      setCriticalCount(count);
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const response = await fetch(`${API_URL}/inventory/hospitals`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        setHospitals(data);
+      } else {
+        // Fallback to mock data
+        setHospitals(getMockHospitals());
+      }
       setLastSynced(new Date());
     } catch (error) {
       console.error("Inventory Fetch Error:", error);
+      setHospitals(getMockHospitals());
     } finally {
       setLoading(false);
     }
@@ -47,63 +74,79 @@ const Inventory: React.FC<InventoryProps> = ({ language, onNavigateToRequest }) 
     return () => clearInterval(interval);
   }, []);
 
-  const processedInventory = useMemo(() => {
-    const latestMap = new Map<string, BloodInventory>();
-    rawInventory.forEach(item => {
-      const key = `${item.hospitalId || item.hospitalName}_${item.bloodType}`;
-      const existing = latestMap.get(key);
-      if (!existing || new Date(item.lastUpdated) > new Date(existing.lastUpdated)) {
-        latestMap.set(key, item);
-      }
-    });
-    let list = Array.from(latestMap.values());
+  const processedHospitals = useMemo(() => {
+    let list = [...hospitals];
 
     if (searchQuery) {
-      list = list.filter(item => 
-        item.hospitalName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.city.toLowerCase().includes(searchQuery.toLowerCase())
+      list = list.filter(h => 
+        h.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        h.city.toLowerCase().includes(searchQuery.toLowerCase())
       );
     }
 
-    if (filterCity !== 'All') list = list.filter(item => item.city === filterCity);
-    if (filterType !== 'All') list = list.filter(item => item.hospitalType === filterType);
-    if (filterBlood !== 'All') list = list.filter(item => item.bloodType === filterBlood);
-
-    list.sort((a, b) => {
-      if (sortBy === 'status') {
-        const order = { 'CRITICAL': 0, 'LOW': 1, 'OPTIMAL': 2 };
-        return order[a.status] - order[b.status];
-      }
-      return new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime();
-    });
+    if (filterCity !== 'All') list = list.filter(h => h.city === filterCity);
+    if (filterType !== 'All') list = list.filter(h => h.type === filterType);
 
     return list;
-  }, [rawInventory, searchQuery, filterCity, filterType, filterBlood, sortBy]);
-
-  const divisionSummaries = useMemo(() => {
-    const divisions: Record<string, number> = {};
-    processedInventory.forEach(item => {
-      divisions[item.division] = (divisions[item.division] || 0) + item.quantity;
-    });
-    return divisions;
-  }, [processedInventory]);
+  }, [hospitals, searchQuery, filterCity, filterType]);
 
   const criticalShortages = useMemo(() => {
-    const criticalMap: Record<BloodGroup, { count: number, needed: number }> = {
-      'O-': { count: 0, needed: 50 }, 'B-': { count: 0, needed: 30 },
-      'A-': { count: 0, needed: 30 }, 'AB-': { count: 0, needed: 15 },
-      'A+': { count: 0, needed: 100 }, 'B+': { count: 0, needed: 100 },
-      'O+': { count: 0, needed: 100 }, 'AB+': { count: 0, needed: 50 },
-    };
+    const shortages: { bloodGroup: BloodGroup; count: number }[] = [];
+    const bloodTypes: BloodGroup[] = ['O-', 'B-', 'A-', 'AB-', 'A+', 'B+', 'O+', 'AB+'];
     
-    rawInventory.forEach(item => {
-      if (criticalMap[item.bloodType]) {
-        criticalMap[item.bloodType].count += item.quantity;
+    bloodTypes.forEach(type => {
+      let totalStock = 0;
+      hospitals.forEach(h => {
+        totalStock += h.bloodStock[type].quantity;
+      });
+      
+      const needed = ['O-', 'B-', 'A-', 'AB-'].includes(type) ? 50 : 100;
+      if (totalStock < needed) {
+        shortages.push({ bloodGroup: type, count: totalStock });
       }
     });
 
-    return Object.entries(criticalMap).filter(([_, data]) => data.count < data.needed);
-  }, [rawInventory]);
+    return shortages;
+  }, [hospitals]);
+
+  const handleDonate = async () => {
+    if (!donateModal) return;
+
+    setDonating(true);
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const token = localStorage.getItem('jwt_token');
+
+      const response = await fetch(`${API_URL}/inventory/donate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` })
+        },
+        body: JSON.stringify({
+          hospitalId: donateModal.hospital.id,
+          bloodGroup: donateModal.bloodGroup,
+          donorId: user.id
+        })
+      });
+
+      if (response.ok) {
+        setDonateSuccess(true);
+        setTimeout(() => {
+          setDonateModal(null);
+          setDonateSuccess(false);
+          fetchData();
+        }, 2000);
+      } else {
+        alert(language === 'en' ? 'Failed to record donation' : 'দান রেকর্ড করতে ব্যর্থ');
+      }
+    } catch (error) {
+      console.error('Donate error:', error);
+      alert(language === 'en' ? 'Error recording donation' : 'দান রেকর্ড করতে ত্রুটি');
+    } finally {
+      setDonating(false);
+    }
+  };
 
   const bloodColors: Record<BloodGroup, string> = {
     'A+': 'bg-blue-600', 'A-': 'bg-blue-400',
@@ -119,14 +162,6 @@ const Inventory: React.FC<InventoryProps> = ({ language, onNavigateToRequest }) 
     return `${Math.floor(diff/3600)}h ago`;
   };
 
-  const getExpiryStatus = (expiryDate: string) => {
-    const diffDays = Math.ceil((new Date(expiryDate).getTime() - Date.now()) / (1000 * 3600 * 24));
-    if (diffDays <= 3) return { label: `Expiring in ${diffDays}d`, color: 'text-red-600 bg-red-50 border-red-100', level: 'RED' };
-    if (diffDays <= 7) return { label: `Expiring in ${diffDays}d`, color: 'text-yellow-600 bg-yellow-50 border-yellow-100', level: 'YELLOW' };
-    return { label: 'Fresh stock', color: 'text-green-600 bg-green-50 border-green-100', level: 'GREEN' };
-  };
-
-  // Export to PDF
   const exportToPDF = () => {
     const printWindow = window.open('', '', 'height=600,width=800');
     if (!printWindow) return;
@@ -139,46 +174,49 @@ const Inventory: React.FC<InventoryProps> = ({ language, onNavigateToRequest }) 
         <style>
           body { font-family: Arial, sans-serif; padding: 20px; }
           h1 { color: #dc2626; text-align: center; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 12px; }
           th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
           th { background-color: #dc2626; color: white; }
           .critical { background-color: #fee2e2; }
           .low { background-color: #fef3c7; }
           .optimal { background-color: #d1fae5; }
-          .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
         </style>
       </head>
       <body>
         <h1>🩸 BloodConnect Bangladesh - Inventory Report</h1>
         <p><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
-        <p><strong>Total Records:</strong> ${processedInventory.length}</p>
         <table>
           <thead>
             <tr>
               <th>Hospital</th>
               <th>City</th>
-              <th>Blood Type</th>
-              <th>Quantity</th>
-              <th>Status</th>
-              <th>Contact</th>
+              <th>A+</th>
+              <th>A-</th>
+              <th>B+</th>
+              <th>B-</th>
+              <th>AB+</th>
+              <th>AB-</th>
+              <th>O+</th>
+              <th>O-</th>
             </tr>
           </thead>
           <tbody>
-            ${processedInventory.map(item => `
-              <tr class="${item.status.toLowerCase()}">
-                <td>${item.hospitalName}</td>
-                <td>${item.city}</td>
-                <td><strong>${item.bloodType}</strong></td>
-                <td>${item.quantity} Units</td>
-                <td>${item.status}</td>
-                <td>${item.phone}</td>
+            ${processedHospitals.map(h => `
+              <tr>
+                <td>${h.name}</td>
+                <td>${h.city}</td>
+                <td class="${h.bloodStock['A+'].status.toLowerCase()}">${h.bloodStock['A+'].quantity}U</td>
+                <td class="${h.bloodStock['A-'].status.toLowerCase()}">${h.bloodStock['A-'].quantity}U</td>
+                <td class="${h.bloodStock['B+'].status.toLowerCase()}">${h.bloodStock['B+'].quantity}U</td>
+                <td class="${h.bloodStock['B-'].status.toLowerCase()}">${h.bloodStock['B-'].quantity}U</td>
+                <td class="${h.bloodStock['AB+'].status.toLowerCase()}">${h.bloodStock['AB+'].quantity}U</td>
+                <td class="${h.bloodStock['AB-'].status.toLowerCase()}">${h.bloodStock['AB-'].quantity}U</td>
+                <td class="${h.bloodStock['O+'].status.toLowerCase()}">${h.bloodStock['O+'].quantity}U</td>
+                <td class="${h.bloodStock['O-'].status.toLowerCase()}">${h.bloodStock['O-'].quantity}U</td>
               </tr>
             `).join('')}
           </tbody>
         </table>
-        <div class="footer">
-          <p>© 2025 BloodConnect Bangladesh | Connecting Donors, Saving Lives</p>
-        </div>
       </body>
       </html>
     `;
@@ -192,21 +230,21 @@ const Inventory: React.FC<InventoryProps> = ({ language, onNavigateToRequest }) 
     }, 250);
   };
 
-  // Export to Excel (CSV format)
   const exportToExcel = () => {
-    const headers = ['Hospital Name', 'Type', 'City', 'Division', 'Blood Type', 'Quantity', 'Status', 'Expiry Date', 'Phone', 'Email', '24/7'];
-    const rows = processedInventory.map(item => [
-      item.hospitalName,
-      item.hospitalType,
-      item.city,
-      item.division,
-      item.bloodType,
-      item.quantity,
-      item.status,
-      new Date(item.expiryDate).toLocaleDateString(),
-      item.phone,
-      item.email,
-      item.is247 ? 'Yes' : 'No'
+    const headers = ['Hospital', 'Type', 'City', 'Phone', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+    const rows = processedHospitals.map(h => [
+      h.name,
+      h.type,
+      h.city,
+      h.phone,
+      h.bloodStock['A+'].quantity,
+      h.bloodStock['A-'].quantity,
+      h.bloodStock['B+'].quantity,
+      h.bloodStock['B-'].quantity,
+      h.bloodStock['AB+'].quantity,
+      h.bloodStock['AB-'].quantity,
+      h.bloodStock['O+'].quantity,
+      h.bloodStock['O-'].quantity
     ]);
 
     const csvContent = [
@@ -225,60 +263,26 @@ const Inventory: React.FC<InventoryProps> = ({ language, onNavigateToRequest }) 
     document.body.removeChild(link);
   };
 
-  // Notify matching donors
-  const notifyMatchingDonors = async () => {
-    if (criticalShortages.length === 0) {
-      alert('No critical shortages to notify about.');
-      return;
-    }
-
-    setNotifying(true);
-    setNotifySuccess(null);
-
-    try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      const criticalBloodType = criticalShortages[0][0] as BloodGroup;
-      const hospitalWithShortage = processedInventory.find(
-        item => item.bloodType === criticalBloodType && item.status === 'CRITICAL'
-      );
-
-      const response = await fetch(`${API_URL}/notifications/notify-donors`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bloodGroup: criticalBloodType,
-          hospitalName: hospitalWithShortage?.hospitalName || 'Multiple Hospitals',
-          unitsNeeded: criticalShortages[0][1].needed - criticalShortages[0][1].count,
-          urgency: 'EMERGENCY',
-          contactPhone: hospitalWithShortage?.phone || '+880 XXX XXXX',
-          district: hospitalWithShortage?.city || 'Dhaka'
-        })
-      });
-
-      const data = await response.json();
-      
-      if (response.ok) {
-        setNotifySuccess(`✅ Successfully notified ${data.successCount} donors via email!`);
-        setTimeout(() => setNotifySuccess(null), 5000);
-      } else {
-        alert(`Error: ${data.message}`);
-      }
-    } catch (error) {
-      console.error('Notification error:', error);
-      alert('Failed to send notifications. Please check if backend is running.');
-    } finally {
-      setNotifying(false);
-    }
+  const labels = {
+    title: { en: 'Blood Inventory', bn: 'রক্ত ইনভেন্টরি' },
+    donate: { en: 'Donate Blood', bn: 'রক্ত দান করুন' },
+    donateAt: { en: 'Donate at', bn: 'দান করুন' },
+    selectBlood: { en: 'Select Blood Group', bn: 'রক্তের গ্রুপ নির্বাচন করুন' },
+    confirmDonate: { en: 'Confirm Donation', bn: 'দান নিশ্চিত করুন' },
+    cancel: { en: 'Cancel', bn: 'বাতিল' },
+    success: { en: 'Donation Recorded Successfully!', bn: 'দান সফলভাবে রেকর্ড হয়েছে!' },
+    thankYou: { en: 'Thank you for saving lives!', bn: 'জীবন বাঁচানোর জন্য ধন্যবাদ!' }
   };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-700 pb-20">
+      {/* Header with Stats */}
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex-1 bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
           <div className="flex justify-between items-center mb-6">
             <h3 className="font-black text-gray-900 uppercase tracking-widest text-[10px] flex items-center gap-2">
               <Activity size={14} className="text-red-600" />
-              Division-wise Inventory
+              {labels.title[language]}
             </h3>
             <div className="flex gap-2">
               <button 
@@ -298,59 +302,27 @@ const Inventory: React.FC<InventoryProps> = ({ language, onNavigateToRequest }) 
             </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {Object.entries(divisionSummaries).map(([div, count]) => (
-              <div key={div} className="text-center p-3 rounded-2xl bg-gray-50 border border-gray-100">
-                <p className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">{div}</p>
-                <p className="text-xl font-black text-gray-900">{count}U</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="lg:w-96 bg-red-600 rounded-[2rem] p-6 text-white shadow-xl shadow-red-200 relative overflow-hidden group">
-          <div className="relative z-10">
-            <h3 className="text-sm font-black uppercase tracking-widest mb-4 flex items-center gap-2">
-              <AlertCircle size={18} className="animate-pulse" />
-              Critical Shortages
-            </h3>
-            <div className="space-y-3 mb-6">
-              {criticalShortages.slice(0, 3).map(([type, data]) => (
-                <div key={type} className="flex items-center justify-between text-xs font-bold bg-white/10 p-2.5 rounded-xl border border-white/10">
-                  <span className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${bloodColors[type as BloodGroup]}`}></span>
-                    {type} Type
-                  </span>
-                  <span>{data.count} / {data.needed} Units</span>
-                </div>
-              ))}
+            <div className="text-center p-3 rounded-2xl bg-gray-50 border border-gray-100">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Total Hospitals</p>
+              <p className="text-xl font-black text-gray-900">{hospitals.length}</p>
             </div>
-            {notifySuccess && (
-              <div className="mb-4 p-3 bg-green-500 text-white rounded-xl text-xs font-bold">
-                {notifySuccess}
-              </div>
-            )}
-            <button 
-              onClick={notifyMatchingDonors}
-              disabled={notifying}
-              className="w-full bg-white text-red-600 py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-red-50 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {notifying ? (
-                <>
-                  <RefreshCw size={14} className="animate-spin" /> Sending...
-                </>
-              ) : (
-                <>
-                  Notify Matching Donors <ChevronRight size={14} />
-                </>
-              )}
-            </button>
-          </div>
-          <div className="absolute -right-10 -bottom-10 opacity-10 group-hover:scale-110 transition-transform">
-            <ShieldAlert size={150} />
+            <div className="text-center p-3 rounded-2xl bg-red-50 border border-red-100">
+              <p className="text-[10px] font-black text-red-400 uppercase tracking-tighter">Critical</p>
+              <p className="text-xl font-black text-red-600">{criticalShortages.length}</p>
+            </div>
+            <div className="text-center p-3 rounded-2xl bg-green-50 border border-green-100">
+              <p className="text-[10px] font-black text-green-400 uppercase tracking-tighter">Your Blood</p>
+              <p className="text-xl font-black text-green-600">{user.bloodGroup}</p>
+            </div>
+            <div className="text-center p-3 rounded-2xl bg-blue-50 border border-blue-100">
+              <p className="text-[10px] font-black text-blue-400 uppercase tracking-tighter">Last Sync</p>
+              <p className="text-xs font-black text-blue-600">{getTimeAgo(lastSynced.toISOString())}</p>
+            </div>
           </div>
         </div>
       </div>
 
+      {/* Filters */}
       <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 space-y-6">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="relative flex-1">
@@ -377,10 +349,10 @@ const Inventory: React.FC<InventoryProps> = ({ language, onNavigateToRequest }) 
               className="bg-gray-50 border border-gray-100 px-4 py-3 rounded-xl text-xs font-bold outline-none cursor-pointer"
               value={filterType} onChange={(e) => setFilterType(e.target.value)}
             >
-              <option value="All">All Facility Types</option>
+              <option value="All">All Types</option>
               <option value="GOVERNMENT">Government</option>
               <option value="PRIVATE">Private</option>
-              <option value="THALASSEMIA_CENTER">Thalassemia Center</option>
+              <option value="THALASSEMIA_CENTER">Thalassemia</option>
             </select>
             <button 
               onClick={fetchData}
@@ -392,118 +364,248 @@ const Inventory: React.FC<InventoryProps> = ({ language, onNavigateToRequest }) 
         </div>
       </div>
 
-      <div className="bg-white border border-gray-100 rounded-[2.5rem] shadow-sm overflow-hidden overflow-x-auto">
-        <table className="w-full text-left text-sm whitespace-nowrap">
-          <thead className="bg-gray-50/50 text-gray-500">
-            <tr>
-              <th className="px-8 py-5 font-black uppercase tracking-widest text-[10px]">Facility Details</th>
-              <th className="px-6 py-5 font-black uppercase tracking-widest text-[10px]">Contact & Type</th>
-              <th className="px-6 py-5 font-black uppercase tracking-widest text-[10px]">Blood Type</th>
-              <th className="px-6 py-5 font-black uppercase tracking-widest text-[10px]">Stock level</th>
-              <th className="px-6 py-5 font-black uppercase tracking-widest text-[10px]">Expiry Check</th>
-              <th className="px-6 py-5 font-black uppercase tracking-widest text-[10px]">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {processedInventory.map((item) => {
-              const expiry = getExpiryStatus(item.expiryDate);
-              return (
-                <tr key={item.id} className="hover:bg-gray-50/50 transition-colors group">
-                  <td className="px-8 py-5">
-                    <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-2xl ${item.hospitalType === 'GOVERNMENT' ? 'bg-green-50 text-green-600' : item.hospitalType === 'THALASSEMIA_CENTER' ? 'bg-purple-50 text-purple-600' : 'bg-blue-50 text-blue-600'}`}>
-                        {item.hospitalType === 'GOVERNMENT' ? <ShieldAlert size={20} /> : item.hospitalType === 'THALASSEMIA_CENTER' ? <Activity size={20} /> : <Building2 size={20} />}
-                      </div>
-                      <div>
-                        <p className="font-black text-gray-900 group-hover:text-red-600 transition-colors">{item.hospitalName}</p>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter flex items-center gap-1">
-                          <MapPin size={10} /> {item.city}, {item.division}
-                          {item.is247 && <span className="ml-2 text-green-600 bg-green-50 px-1 rounded">24/7 OPEN</span>}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-5">
-                    <div className="space-y-1">
-                      <p className="text-xs font-bold text-gray-700 flex items-center gap-2"><Phone size={10} className="text-gray-400" /> {item.phone}</p>
-                      <p className="text-[10px] text-gray-400 font-medium flex items-center gap-2"><Mail size={10} className="text-gray-400" /> {item.email}</p>
-                    </div>
-                  </td>
-                  <td className="px-6 py-5">
-                    <div className={`w-12 h-12 ${bloodColors[item.bloodType]} text-white rounded-2xl flex items-center justify-center font-black shadow-lg shadow-red-100`}>
-                      {item.bloodType}
-                    </div>
-                  </td>
-                  <td className="px-6 py-5">
-                    <div className="w-32">
-                      <div className="flex justify-between items-center mb-1">
-                        <span className={`text-[10px] font-black uppercase ${item.status === 'CRITICAL' ? 'text-red-600 animate-pulse' : 'text-gray-400'}`}>
-                          {item.status}
-                        </span>
-                        <span className="text-xs font-black text-gray-900">{item.quantity}U</span>
-                      </div>
-                      <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full transition-all duration-1000 ${item.status === 'CRITICAL' ? 'bg-red-500' : item.status === 'LOW' ? 'bg-yellow-500' : 'bg-green-500'}`}
-                          style={{ width: `${Math.min((item.quantity/150)*100, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-5">
-                    <div className={`px-3 py-1.5 rounded-xl border flex items-center gap-2 ${expiry.color}`}>
-                      <Clock size={12} className={expiry.level === 'RED' ? 'animate-spin-slow' : ''} />
-                      <span className="text-[10px] font-black uppercase">{expiry.label}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-5">
-                    <div className="flex gap-2">
-                      <button 
-                        onClick={() => {
-                          if (onNavigateToRequest) {
-                            onNavigateToRequest({
-                              name: item.hospitalName,
-                              address: `${item.city}, ${item.division}`,
-                              phone: item.phone
-                            });
-                          }
-                        }}
-                        className="p-2 bg-gray-50 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all" 
-                        title="Request Blood"
-                      >
-                        <ExternalLink size={16} />
-                      </button>
-                      <button className="p-2 bg-gray-50 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all" title="Update Stock">
-                        <RefreshCw size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        
-        {processedInventory.length === 0 && (
-          <div className="p-20 text-center">
-            <div className="bg-gray-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-dashed border-gray-200">
-              <Database className="text-gray-300" size={32} />
-            </div>
-            <h4 className="font-black text-gray-900 mb-1">No matches found</h4>
-            <p className="text-xs font-bold text-gray-400 uppercase">Try adjusting your filters</p>
-          </div>
-        )}
-      </div>
-
-      <div className="flex justify-between items-center text-[10px] font-black text-gray-400 uppercase tracking-widest px-4">
-        <span>© 2025 BloodConnect BD</span>
-        <div className="flex items-center gap-2">
-          <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-          Server synchronized: {getTimeAgo(lastSynced.toISOString())}
+      {/* Hospitals List */}
+      {loading ? (
+        <div className="flex justify-center py-20">
+          <RefreshCw size={48} className="text-red-600 animate-spin" />
         </div>
-      </div>
+      ) : (
+        <div className="space-y-6">
+          {processedHospitals.map(hospital => (
+            <div key={hospital.id} className="bg-white rounded-[2.5rem] shadow-sm border border-gray-100 overflow-hidden">
+              {/* Hospital Header */}
+              <div className="p-6 bg-gray-50 border-b border-gray-100">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className={`p-4 rounded-2xl ${
+                      hospital.type === 'GOVERNMENT' ? 'bg-green-50 text-green-600' : 
+                      hospital.type === 'THALASSEMIA_CENTER' ? 'bg-purple-50 text-purple-600' : 
+                      'bg-blue-50 text-blue-600'
+                    }`}>
+                      {hospital.type === 'GOVERNMENT' ? <ShieldAlert size={24} /> : 
+                       hospital.type === 'THALASSEMIA_CENTER' ? <Activity size={24} /> : 
+                       <Building2 size={24} />}
+                    </div>
+                    <div>
+                      <h3 className="font-black text-gray-900 text-lg">{hospital.name}</h3>
+                      <p className="text-xs font-bold text-gray-500 flex items-center gap-2 mt-1">
+                        <MapPin size={12} /> {hospital.city}, {hospital.division}
+                        {hospital.is247 && <span className="ml-2 bg-green-100 text-green-700 px-2 py-0.5 rounded text-[10px] font-black">24/7</span>}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => {
+                        if (onNavigateToRequest) {
+                          onNavigateToRequest({
+                            name: hospital.name,
+                            address: `${hospital.city}, ${hospital.division}`,
+                            phone: hospital.phone
+                          });
+                        }
+                      }}
+                      className="px-4 py-2 bg-red-600 text-white rounded-xl text-xs font-black hover:bg-red-700 transition-all flex items-center gap-2"
+                    >
+                      <ExternalLink size={14} /> Request Blood
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Blood Stock Grid */}
+              <div className="p-6">
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
+                  {(['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as BloodGroup[]).map(bloodType => {
+                    const stock = hospital.bloodStock[bloodType];
+                    return (
+                      <div 
+                        key={bloodType}
+                        className={`p-4 rounded-2xl border-2 text-center transition-all hover:scale-105 cursor-pointer ${
+                          stock.status === 'CRITICAL' ? 'bg-red-50 border-red-200' :
+                          stock.status === 'LOW' ? 'bg-yellow-50 border-yellow-200' :
+                          'bg-green-50 border-green-200'
+                        }`}
+                        onClick={() => setDonateModal({ hospital, bloodGroup: bloodType })}
+                      >
+                        <div className={`w-12 h-12 mx-auto mb-2 ${bloodColors[bloodType]} text-white rounded-xl flex items-center justify-center font-black shadow-lg`}>
+                          {bloodType}
+                        </div>
+                        <p className="text-2xl font-black text-gray-900">{stock.quantity}</p>
+                        <p className="text-[8px] font-black text-gray-400 uppercase tracking-wider">Units</p>
+                        <div className={`mt-2 px-2 py-1 rounded-lg text-[8px] font-black uppercase ${
+                          stock.status === 'CRITICAL' ? 'bg-red-100 text-red-700' :
+                          stock.status === 'LOW' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-green-100 text-green-700'
+                        }`}>
+                          {stock.status}
+                        </div>
+                        <button 
+                          className="mt-2 w-full bg-white border border-gray-200 text-gray-700 py-1 rounded-lg text-[10px] font-black hover:bg-gray-50 transition-all flex items-center justify-center gap-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDonateModal({ hospital, bloodGroup: bloodType });
+                          }}
+                        >
+                          <Heart size={10} /> Donate
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                <div className="mt-4 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2 text-gray-500">
+                    <Phone size={12} /> {hospital.phone}
+                    <span className="mx-2">•</span>
+                    <Mail size={12} /> {hospital.email}
+                  </div>
+                  <span className="text-gray-400 font-bold">
+                    <Clock size={12} className="inline mr-1" />
+                    {getTimeAgo(hospital.lastUpdated)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Donate Modal */}
+      {donateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white w-full max-w-md rounded-[3rem] shadow-2xl overflow-hidden border border-gray-100 animate-in zoom-in-95 duration-300">
+            {donateSuccess ? (
+              <div className="p-12 text-center">
+                <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <CheckCircle2 size={40} strokeWidth={3} />
+                </div>
+                <h3 className="text-2xl font-black text-gray-900 mb-2">{labels.success[language]}</h3>
+                <p className="text-gray-600 font-medium">{labels.thankYou[language]}</p>
+              </div>
+            ) : (
+              <>
+                <div className="bg-red-600 p-8 text-white flex justify-between items-center">
+                  <div>
+                    <h3 className="text-2xl font-black">{labels.donate[language]}</h3>
+                    <p className="text-red-100 text-sm font-medium mt-1">{donateModal.hospital.name}</p>
+                  </div>
+                  <button onClick={() => setDonateModal(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                    <X size={24} />
+                  </button>
+                </div>
+
+                <div className="p-8">
+                  <div className="text-center mb-8">
+                    <div className={`w-24 h-24 mx-auto mb-4 ${bloodColors[donateModal.bloodGroup]} text-white rounded-3xl flex items-center justify-center font-black text-3xl shadow-2xl`}>
+                      {donateModal.bloodGroup}
+                    </div>
+                    <p className="text-sm font-bold text-gray-500">
+                      Current Stock: <span className="text-gray-900">{donateModal.hospital.bloodStock[donateModal.bloodGroup].quantity} Units</span>
+                    </p>
+                  </div>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-6">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="text-blue-600 shrink-0" size={20} />
+                      <div className="text-xs text-blue-900 font-medium leading-relaxed">
+                        <p className="font-black mb-1">Important:</p>
+                        <ul className="space-y-1">
+                          <li>• You must not have donated in the last 120 days</li>
+                          <li>• You will receive +50 reward points</li>
+                          <li>• Hospital will contact you for appointment</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <button 
+                      onClick={() => setDonateModal(null)}
+                      className="py-4 border-2 border-gray-200 text-gray-700 rounded-2xl font-black hover:bg-gray-50 transition-all"
+                    >
+                      {labels.cancel[language]}
+                    </button>
+                    <button 
+                      onClick={handleDonate}
+                      disabled={donating}
+                      className="py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {donating ? (
+                        <RefreshCw size={20} className="animate-spin" />
+                      ) : (
+                        <>
+                          <Heart size={20} />
+                          {labels.confirmDonate[language]}
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+// Mock data generator
+function getMockHospitals(): Hospital[] {
+  const hospitals = [
+    {
+      id: 'h1',
+      name: 'Dhaka Medical College Hospital',
+      type: 'GOVERNMENT' as const,
+      city: 'Dhaka',
+      division: 'Dhaka',
+      phone: '+880255165088',
+      email: 'info@dmch.gov.bd',
+      is247: true
+    },
+    {
+      id: 'h2',
+      name: 'Square Hospital Ltd',
+      type: 'PRIVATE' as const,
+      city: 'Dhaka',
+      division: 'Dhaka',
+      phone: '10616',
+      email: 'info@squarehospital.com',
+      is247: true
+    },
+    {
+      id: 'h3',
+      name: 'Bangladesh Thalassemia Foundation',
+      type: 'THALASSEMIA_CENTER' as const,
+      city: 'Dhaka',
+      division: 'Dhaka',
+      phone: '+8801730434771',
+      email: 'btf.bd@gmail.com',
+      is247: false
+    }
+  ];
+
+  return hospitals.map(h => ({
+    ...h,
+    bloodStock: {
+      'A+': { quantity: Math.floor(Math.random() * 150), status: getStatus(Math.floor(Math.random() * 150)), expiryDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString() },
+      'A-': { quantity: Math.floor(Math.random() * 50), status: getStatus(Math.floor(Math.random() * 50)), expiryDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString() },
+      'B+': { quantity: Math.floor(Math.random() * 150), status: getStatus(Math.floor(Math.random() * 150)), expiryDate: new Date(Date.now() + 20 * 24 * 60 * 60 * 1000).toISOString() },
+      'B-': { quantity: Math.floor(Math.random() * 50), status: getStatus(Math.floor(Math.random() * 50)), expiryDate: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000).toISOString() },
+      'AB+': { quantity: Math.floor(Math.random() * 100), status: getStatus(Math.floor(Math.random() * 100)), expiryDate: new Date(Date.now() + 18 * 24 * 60 * 60 * 1000).toISOString() },
+      'AB-': { quantity: Math.floor(Math.random() * 40), status: getStatus(Math.floor(Math.random() * 40)), expiryDate: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString() },
+      'O+': { quantity: Math.floor(Math.random() * 150), status: getStatus(Math.floor(Math.random() * 150)), expiryDate: new Date(Date.now() + 25 * 24 * 60 * 60 * 1000).toISOString() },
+      'O-': { quantity: Math.floor(Math.random() * 50), status: getStatus(Math.floor(Math.random() * 50)), expiryDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString() }
+    } as Hospital['bloodStock'],
+    lastUpdated: new Date(Date.now() - Math.random() * 3600000).toISOString()
+  }));
+}
+
+function getStatus(quantity: number): 'CRITICAL' | 'LOW' | 'OPTIMAL' {
+  if (quantity < 10) return 'CRITICAL';
+  if (quantity < 30) return 'LOW';
+  return 'OPTIMAL';
+}
 
 export default Inventory;

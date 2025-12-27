@@ -1,4 +1,14 @@
-import React, { useState, useEffect, useRef } from 'react';
+const getTimeAgo = (timestamp: string) => {
+    const now = Date.now();
+    const then = new Date(timestamp).getTime();
+    const diff = Math.floor((now - then) / 1000);
+    
+    if (diff < 60) return `${diff} sec ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+    if (diff < 2592000) return `${Math.floor(diff / 86400)} days ago`;
+    return new Date(timestamp).toLocaleDateString();
+  };import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Phone, Clock, AlertTriangle, ShieldCheck, Navigation, ExternalLink, Navigation2 } from 'lucide-react';
 import { BloodRequest } from '../types';
 
