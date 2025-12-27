@@ -98,51 +98,51 @@ function App() {
     <div className="min-h-screen bg-gray-50">
       {/* Top Navigation Bar */}
       <nav className="bg-white border-b border-gray-100 sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+        <div className="max-w-full mx-auto px-2 sm:px-4 lg:px-6">
+          <div className="flex justify-between items-center h-14 md:h-16 gap-2">
             {/* Logo */}
-            <div className="flex items-center gap-3">
-              <div className="bg-red-600 p-2 rounded-xl shadow-lg">
-                <Heart className="text-white" size={24} fill="white" />
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="bg-red-600 p-1.5 md:p-2 rounded-xl shadow-lg">
+                <Heart className="text-white" size={20} fill="white" />
               </div>
               <div>
-                <h1 className="text-xl font-black text-gray-900 tracking-tight">BloodConnect</h1>
-                <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Bangladesh</p>
+                <h1 className="text-base md:text-xl font-black text-gray-900 tracking-tight">BloodConnect</h1>
+                <p className="text-[7px] md:text-[8px] font-bold text-gray-400 uppercase tracking-widest">Bangladesh</p>
               </div>
             </div>
 
             {/* Desktop Navigation */}
-            <div className="hidden md:flex items-center gap-2">
+            <div className="hidden md:flex items-center gap-1 flex-1 overflow-x-auto scrollbar-hide justify-center max-w-full">
               {navItems.map(item => (
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex-shrink-0 ${
                     activeTab === item.id
                       ? 'bg-red-600 text-white shadow-lg'
                       : 'text-gray-600 hover:bg-gray-100'
                   }`}
                 >
-                  <item.icon size={18} />
-                  <span className="hidden lg:inline">{item.label[language]}</span>
+                  <item.icon size={16} />
+                  <span className="hidden xl:inline">{item.label[language]}</span>
                 </button>
               ))}
             </div>
 
             {/* Right Side Actions */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 onClick={toggleLanguage}
-                className="hidden sm:flex items-center gap-2 px-3 py-2 bg-gray-100 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-200 transition-all"
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-100 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-200 transition-all whitespace-nowrap"
               >
                 {language === 'en' ? 'বাংলা' : 'EN'}
               </button>
               <button
                 onClick={handleLogout}
-                className="hidden sm:flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl text-sm font-bold hover:bg-red-100 transition-all"
+                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-100 transition-all whitespace-nowrap"
               >
-                <LogOut size={18} />
-                <span className="hidden lg:inline">{language === 'en' ? 'Logout' : 'লগআউট'}</span>
+                <LogOut size={16} />
+                <span className="hidden xl:inline">{language === 'en' ? 'Logout' : 'লগআউট'}</span>
               </button>
               
               {/* Mobile Menu Button */}
