@@ -50,12 +50,13 @@ body {
   border-radius: 2rem;
 }
 
+/* Marker Styles & Pulse Animations */
 .urgent-marker div {
   background: #dc2626;
   border: 3px solid white;
   border-radius: 50%;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  animation: pulse-marker 2s infinite;
 }
 
 .normal-marker div {
@@ -65,13 +66,36 @@ body {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
-@keyframes pulse {
+@keyframes pulse-marker {
   0%, 100% {
-    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
   }
   50% {
-    opacity: 0.5;
+    box-shadow: 0 0 0 20px rgba(220, 38, 38, 0);
   }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 15px rgba(59, 130, 246, 0);
+  }
+}
+
+/* Leaflet Popup Styling */
+.leaflet-popup-content-wrapper {
+  border-radius: 1rem;
+  padding: 0;
+}
+
+.leaflet-popup-content {
+  margin: 0;
+}
+
+.leaflet-popup-close-button {
+  font-size: 20px !important;
 }
 
 /* Animation Utilities */
@@ -81,6 +105,17 @@ body {
   }
   to {
     opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
@@ -123,6 +158,10 @@ body {
 
 .fade-in {
   animation: fadeIn 0.3s ease-in;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
 }
 
 .slide-in-from-top-4 {

@@ -1,34 +1,45 @@
-const getTimeAgo = (timestamp: string) => {
-    const now = Date.now();
-    const then = new Date(timestamp).getTime();
-    const diff = Math.floor((now - then) / 1000);
-    
-    if (diff < 60) return `${diff} sec ago`;
-    if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
-    if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
-    if (diff < 2592000) return `${Math.floor(diff / 86400)} days ago`;
-    return new Date(timestamp).toLocaleDateString();
-  };import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MapPin, Phone, Clock, AlertTriangle, ShieldCheck, Navigation, ExternalLink, Navigation2 } from 'lucide-react';
 import { BloodRequest } from '../types';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
 interface EmergencyMapProps {
   language: 'en' | 'bn';
 }
 
-declare const L: any;
+// Add type declarations for leaflet-polylinedecorator
+declare module 'leaflet' {
+  namespace Symbol {
+    function arrowHead(options?: any): any;
+  }
+  function polylineDecorator(polyline: any, options?: any): any;
+}
+
+const getTimeAgo = (timestamp: string) => {
+  const now = Date.now();
+  const then = new Date(timestamp).getTime();
+  const diff = Math.floor((now - then) / 1000);
+  
+  if (diff < 60) return `${diff} sec ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} hours ago`;
+  if (diff < 2592000) return `${Math.floor(diff / 86400)} days ago`;
+  return new Date(timestamp).toLocaleDateString();
+};
 
 const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
   const mapRef = useRef<HTMLDivElement>(null);
-  const leafletMap = useRef<any>(null);
-  const markersLayer = useRef<any>(null);
-  const routeLayer = useRef<any>(null);
-  const userMarker = useRef<any>(null);
+  const leafletMap = useRef<L.Map | null>(null);
+  const markersLayer = useRef<L.LayerGroup | null>(null);
+  const routeLayer = useRef<L.LayerGroup | null>(null);
+  const userMarker = useRef<L.Marker | null>(null);
 
   const [requests, setRequests] = useState<BloodRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<BloodRequest | null>(null);
+  const [routeData, setRouteData] = useState<{distance: number, duration: number} | null>(null);
 
   // Fetch requests from database
   const fetchRequests = async () => {
@@ -37,6 +48,7 @@ const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
       const response = await fetch(`${API_URL}/requests?status=OPEN`);
       if (response.ok) {
         const data = await response.json();
+        console.log('📍 Fetched requests:', data);
         setRequests(data);
       }
     } catch (error) {
@@ -61,20 +73,30 @@ const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
           if (leafletMap.current && !userMarker.current) {
             const userIcon = L.divIcon({
               className: 'user-location-marker',
-              html: `<div style="width: 20px; height: 20px; background: #3b82f6; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);"></div>`,
-              iconSize: [20, 20],
-              iconAnchor: [10, 10]
+              html: `<div style="width: 24px; height: 24px; background: #3b82f6; border: 4px solid white; border-radius: 50%; box-shadow: 0 0 15px rgba(59, 130, 246, 0.6); animation: pulse 2s infinite;"></div>`,
+              iconSize: [24, 24],
+              iconAnchor: [12, 12]
             });
             
             userMarker.current = L.marker([location.lat, location.lng], { icon: userIcon })
               .addTo(leafletMap.current)
-              .bindPopup('<div class="p-2"><strong>Your Location</strong></div>');
+              .bindPopup('<div class="p-2 font-bold">📍 Your Location</div>');
+
+            // Fly to user location
+            leafletMap.current.flyTo([location.lat, location.lng], 12, { duration: 2 });
           }
         },
         (error) => {
           console.error('Geolocation error:', error);
+          alert(language === 'en' 
+            ? 'Please enable location access in your browser settings' 
+            : 'ব্রাউজার সেটিংসে অবস্থান অ্যাক্সেস সক্ষম করুন');
         }
       );
+    } else {
+      alert(language === 'en' 
+        ? 'Geolocation is not supported by your browser' 
+        : 'আপনার ব্রাউজার জিওলোকেশন সমর্থন করে না');
     }
   };
 
@@ -91,12 +113,19 @@ const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
     if (!mapRef.current || leafletMap.current) return;
 
     // Initialize map
-    leafletMap.current = L.map(mapRef.current).setView([23.8103, 90.4125], 7);
+    leafletMap.current = L.map(mapRef.current, {
+      center: [23.8103, 90.4125],
+      zoom: 7,
+      zoomControl: false
+    });
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-      subdomains: 'abcd',
-      maxZoom: 20
+    // Add zoom control to top-right
+    L.control.zoom({ position: 'topright' }).addTo(leafletMap.current);
+
+    // Use OpenStreetMap tiles (completely free)
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19
     }).addTo(leafletMap.current);
 
     markersLayer.current = L.layerGroup().addTo(leafletMap.current);
@@ -121,28 +150,60 @@ const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
     markersLayer.current.clearLayers();
 
     requests.forEach(req => {
-      const iconClass = req.urgency === 'EMERGENCY' ? 'urgent-marker' : 'normal-marker';
+      const isEmergency = req.urgency === 'EMERGENCY';
       
       const customIcon = L.divIcon({
-        className: iconClass,
-        html: `<div style="width: 14px; height: 14px;"></div>`,
-        iconSize: [14, 14],
-        iconAnchor: [7, 7]
+        className: 'custom-marker',
+        html: `
+          <div style="
+            width: 40px; 
+            height: 40px; 
+            background: ${isEmergency ? '#dc2626' : '#2563eb'}; 
+            border: 4px solid white; 
+            border-radius: 50%; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            font-weight: 900; 
+            color: white; 
+            font-size: 13px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            cursor: pointer;
+            transition: transform 0.2s;
+            ${isEmergency ? 'animation: pulse-marker 2s infinite;' : ''}
+          " 
+          onmouseover="this.style.transform='scale(1.2)'" 
+          onmouseout="this.style.transform='scale(1)'">
+            ${req.bloodGroup}
+          </div>
+        `,
+        iconSize: [40, 40],
+        iconAnchor: [20, 20]
       });
 
       const marker = L.marker([req.location.lat, req.location.lng], { icon: customIcon })
         .bindPopup(`
-          <div class="p-2">
-            <h4 class="font-black text-gray-900">${req.hospitalName}</h4>
-            <p class="text-xs font-bold text-red-600 mb-2">${req.bloodGroup} Needed: ${req.unitsNeeded} Units</p>
-            <p class="text-[10px] text-gray-500">${req.location.address}</p>
+          <div class="p-3" style="min-width: 200px;">
+            <h4 class="font-black text-gray-900 mb-2">${req.hospitalName}</h4>
+            <p class="text-sm font-bold text-red-600 mb-2">${req.bloodGroup} • ${req.unitsNeeded} Units Needed</p>
+            <p class="text-xs text-gray-600 mb-2">${req.location.address}</p>
+            <span class="inline-block px-3 py-1 rounded-full text-xs font-black ${
+              isEmergency ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+            }">
+              ${req.urgency}
+            </span>
           </div>
-        `);
+        `)
+        .on('click', () => {
+          setSelectedRequest(req);
+          focusOnRequest(req.location.lat, req.location.lng);
+        });
       
-      markersLayer.current.addLayer(marker);
+      markersLayer.current!.addLayer(marker);
     });
   };
 
+  // Calculate distance using Haversine formula
   const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
     const R = 6371; // Earth's radius in km
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -155,7 +216,29 @@ const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
     return R * c;
   };
 
-  const showDirections = (request: BloodRequest) => {
+  // Get route from OSRM (Open Source Routing Machine) - FREE!
+  const getRoute = async (start: [number, number], end: [number, number]) => {
+    try {
+      const url = `https://router.project-osrm.org/route/v1/driving/${start[1]},${start[0]};${end[1]},${end[0]}?overview=full&geometries=geojson`;
+      const response = await fetch(url);
+      const data = await response.json();
+      
+      if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+        const route = data.routes[0];
+        return {
+          coordinates: route.geometry.coordinates.map((coord: number[]) => [coord[1], coord[0]]), // Swap lng,lat to lat,lng
+          distance: route.distance / 1000, // Convert to km
+          duration: route.duration / 60 // Convert to minutes
+        };
+      }
+      return null;
+    } catch (error) {
+      console.error('OSRM routing error:', error);
+      return null;
+    }
+  };
+
+  const showDirections = async (request: BloodRequest) => {
     if (!userLocation) {
       alert(language === 'en' 
         ? 'Please enable location access to see directions' 
@@ -164,58 +247,130 @@ const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
       return;
     }
 
+    if (!leafletMap.current || !routeLayer.current) return;
+
     setSelectedRequest(request);
 
     // Clear previous route
-    if (routeLayer.current) {
-      routeLayer.current.clearLayers();
+    routeLayer.current.clearLayers();
+
+    try {
+      // Get actual route from OSRM
+      const routeInfo = await getRoute(
+        [userLocation.lat, userLocation.lng],
+        [request.location.lat, request.location.lng]
+      );
+
+      if (routeInfo) {
+        setRouteData({
+          distance: routeInfo.distance,
+          duration: routeInfo.duration
+        });
+
+        // Draw the route on map
+        const polyline = L.polyline(routeInfo.coordinates, {
+          color: '#dc2626',
+          weight: 5,
+          opacity: 0.8,
+          lineJoin: 'round'
+        }).addTo(routeLayer.current);
+
+        // Add arrow decorators to show direction
+        const decorator = L.polylineDecorator(polyline, {
+          patterns: [
+            {
+              offset: 25,
+              repeat: 100,
+              symbol: L.Symbol.arrowHead({
+                pixelSize: 12,
+                pathOptions: { 
+                  fillOpacity: 1, 
+                  weight: 0,
+                  color: '#dc2626'
+                }
+              })
+            }
+          ]
+        });
+        routeLayer.current.addLayer(decorator);
+
+        // Fit map to show entire route with padding
+        leafletMap.current.fitBounds(polyline.getBounds(), { 
+          padding: [80, 80],
+          maxZoom: 14
+        });
+
+        // Show distance popup at midpoint
+        const midIndex = Math.floor(routeInfo.coordinates.length / 2);
+        const midpoint = routeInfo.coordinates[midIndex];
+        
+        L.popup()
+          .setLatLng(midpoint)
+          .setContent(`
+            <div class="text-center p-2">
+              <div class="font-black text-lg text-red-600">${routeInfo.distance.toFixed(1)} km</div>
+              <div class="text-xs text-gray-600">≈ ${Math.round(routeInfo.duration)} min drive</div>
+            </div>
+          `)
+          .openOn(leafletMap.current);
+
+      } else {
+        // Fallback to straight line if routing fails
+        const distance = calculateDistance(
+          userLocation.lat, 
+          userLocation.lng, 
+          request.location.lat, 
+          request.location.lng
+        );
+        
+        setRouteData({
+          distance: distance,
+          duration: distance * 2 // Rough estimate
+        });
+
+        // Draw straight line as fallback
+        const latlngs: [number, number][] = [
+          [userLocation.lat, userLocation.lng],
+          [request.location.lat, request.location.lng]
+        ];
+
+        const polyline = L.polyline(latlngs, {
+          color: '#dc2626',
+          weight: 4,
+          opacity: 0.7,
+          dashArray: '10, 10'
+        }).addTo(routeLayer.current);
+
+        leafletMap.current.fitBounds(polyline.getBounds(), { padding: [80, 80] });
+
+        alert(language === 'en' 
+          ? 'Showing straight-line distance. Actual route may vary.' 
+          : 'সরাসরি দূরত্ব দেখানো হচ্ছে। প্রকৃত রুট ভিন্ন হতে পারে।');
+      }
+    } catch (error) {
+      console.error('Route calculation error:', error);
+      
+      // Final fallback
+      const distance = calculateDistance(
+        userLocation.lat, 
+        userLocation.lng, 
+        request.location.lat, 
+        request.location.lng
+      );
+      setRouteData({
+        distance: distance,
+        duration: distance * 2
+      });
     }
-
-    // Draw line from user to request
-    const latlngs = [
-      [userLocation.lat, userLocation.lng],
-      [request.location.lat, request.location.lng]
-    ];
-
-    const polyline = L.polyline(latlngs, {
-      color: '#dc2626',
-      weight: 3,
-      opacity: 0.7,
-      dashArray: '10, 10'
-    }).addTo(routeLayer.current);
-
-    // Fit map to show both points
-    leafletMap.current.fitBounds(polyline.getBounds(), { padding: [50, 50] });
-
-    // Calculate distance
-    const distance = calculateDistance(
-      userLocation.lat, 
-      userLocation.lng, 
-      request.location.lat, 
-      request.location.lng
-    );
-
-    // Show distance info
-    const midpoint = [
-      (userLocation.lat + request.location.lat) / 2,
-      (userLocation.lng + request.location.lng) / 2
-    ];
-
-    L.popup()
-      .setLatLng(midpoint)
-      .setContent(`<div class="text-center"><strong>${distance.toFixed(2)} km</strong><br><span class="text-xs">Approx. ${Math.round(distance * 2)} min drive</span></div>`)
-      .openOn(leafletMap.current);
   };
 
   const openGoogleMaps = (request: BloodRequest) => {
     if (!userLocation) {
-      // Open destination only
       window.open(
         `https://www.google.com/maps/search/?api=1&query=${request.location.lat},${request.location.lng}`,
         '_blank'
       );
     } else {
-      // Open with directions
       window.open(
         `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${request.location.lat},${request.location.lng}&travelmode=driving`,
         '_blank'
@@ -224,9 +379,8 @@ const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
   };
 
   const handleAccept = async (request: BloodRequest) => {
-    showDirections(request);
+    await showDirections(request);
     
-    // Also mark as accepted in backend
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
       const token = localStorage.getItem('jwt_token');
@@ -243,7 +397,7 @@ const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
         alert(language === 'en' 
           ? 'Request accepted! Please contact the hospital.' 
           : 'অনুরোধ গৃহীত! অনুগ্রহ করে হাসপাতালে যোগাযোগ করুন।');
-        fetchRequests(); // Refresh list
+        fetchRequests();
       }
     } catch (error) {
       console.error('Accept request error:', error);
@@ -256,14 +410,23 @@ const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
     }
   };
 
+  const resetMap = () => {
+    if (leafletMap.current && routeLayer.current) {
+      leafletMap.current.flyTo([23.8103, 90.4125], 7, { duration: 1.5 });
+      routeLayer.current.clearLayers();
+      setSelectedRequest(null);
+      setRouteData(null);
+    }
+  };
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 h-[calc(100vh-10rem)]">
       <div className="lg:col-span-2 bg-white rounded-[2.5rem] overflow-hidden shadow-2xl shadow-red-100/30 border border-gray-100 relative">
         <div ref={mapRef} className="absolute inset-0 z-0"></div>
         
         {/* Map Controls */}
-        <div className="absolute top-6 left-6 z-10 flex flex-col gap-2">
-          <div className="bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-gray-100 flex items-center gap-4">
+        <div className="absolute top-6 left-6 z-[1000] flex flex-col gap-2">
+          <div className="bg-white/95 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-gray-100 flex items-center gap-4">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse"></div>
               <span className="text-[10px] font-black uppercase tracking-widest text-gray-700">
@@ -285,15 +448,35 @@ const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
               </div>
             )}
           </div>
+
+          {/* Route Info */}
+          {routeData && selectedRequest && (
+  <button 
+    onClick={() => focusOnRequest(selectedRequest.location.lat, selectedRequest.location.lng)}
+    className="bg-green-500 text-white p-4 rounded-2xl shadow-xl border border-green-600 animate-fade-in hover:bg-green-600 transition-all active:scale-95 cursor-pointer w-full text-left"
+  >
+              <div className="flex items-center gap-3">
+                <Navigation2 className="animate-pulse" size={20} />
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wide">
+                    {language === 'en' ? 'Route Active' : 'রুট সক্রিয়'}
+                  </p>
+                  <p className="text-lg font-black">
+                    {routeData.distance.toFixed(1)} km • {Math.round(routeData.duration)} min
+                  </p>
+                  <p className="text-[10px] opacity-90 mt-1">
+                    {language === 'en' ? 'To ' : 'থেকে '}{selectedRequest.hospitalName}
+                  </p>
+                </div>
+              </div>
+            </button>
+          )}
         </div>
 
         <button 
-          onClick={() => {
-            leafletMap.current.setView([23.8103, 90.4125], 7);
-            if (routeLayer.current) routeLayer.current.clearLayers();
-            setSelectedRequest(null);
-          }}
-          className="absolute top-6 right-6 z-10 bg-white p-3 rounded-2xl shadow-xl border border-gray-100 hover:bg-gray-50 transition-all active:scale-95"
+          onClick={resetMap}
+          className="absolute top-6 right-6 z-[1000] bg-white p-3 rounded-2xl shadow-xl border border-gray-100 hover:bg-gray-50 transition-all active:scale-95"
+          title={language === 'en' ? 'Reset Map' : 'ম্যাপ রিসেট করুন'}
         >
           <Navigation size={20} className="text-gray-600" />
         </button>
@@ -301,7 +484,7 @@ const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
         {!userLocation && (
           <button 
             onClick={getUserLocation}
-            className="absolute bottom-6 right-6 z-10 bg-blue-600 text-white px-4 py-3 rounded-2xl shadow-xl hover:bg-blue-700 transition-all active:scale-95 flex items-center gap-2 font-bold text-sm"
+            className="absolute bottom-6 right-6 z-[1000] bg-blue-600 text-white px-4 py-3 rounded-2xl shadow-xl hover:bg-blue-700 transition-all active:scale-95 flex items-center gap-2 font-bold text-sm"
           >
             <Navigation2 size={18} />
             {language === 'en' ? 'Enable Location' : 'অবস্থান সক্ষম করুন'}
@@ -357,7 +540,7 @@ const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
                     {req.urgency === 'EMERGENCY' ? (language === 'en' ? 'EMERGENCY' : 'জরুরী') : (language === 'en' ? 'NORMAL' : 'সাধারণ')}
                   </span>
                   <span className="text-[10px] font-bold text-gray-400 flex items-center gap-1 uppercase">
-                    <Clock size={12} /> {req.timestamp ? new Date(req.timestamp).toLocaleTimeString() : 'Just now'}
+                    <Clock size={12} /> {req.timestamp ? getTimeAgo(req.timestamp) : 'Just now'}
                   </span>
                 </div>
                 
@@ -373,7 +556,7 @@ const EmergencyMap: React.FC<EmergencyMapProps> = ({ language }) => {
                     <p className="text-xs font-bold text-gray-400 flex items-center gap-1 mt-1">
                       <MapPin size={12} className="text-red-500" /> {req.location.address}
                     </p>
-                    {distance && (
+                    {distance !==null && (
                       <p className="text-xs font-bold text-blue-600 flex items-center gap-1 mt-1">
                         <Navigation2 size={12} /> {distance.toFixed(1)} km away • ~{Math.round(distance * 2)} min
                       </p>

@@ -8,6 +8,8 @@ export interface Conversation {
     email: string;
     bloodGroup?: string;
     isOnline: boolean;
+    district?: string;
+    phone?: string;
   };
   lastMessage?: {
     content: string;
@@ -26,6 +28,41 @@ export interface Message {
   read: boolean;
   timestamp: string;
 }
+
+export interface ChatUser {
+  id: string;
+  name: string;
+  email: string;
+  bloodGroup: string;
+  district: string;
+  phone: string;
+  isAvailable: boolean;
+  points: number;
+}
+
+/**
+ * Get all users for chat discovery
+ */
+export const getAllUsers = async (): Promise<ChatUser[]> => {
+  const token = localStorage.getItem('jwt_token');
+  
+  try {
+    const response = await fetch(`${API_URL}/users`, {
+      headers: {
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch users');
+    }
+
+    return response.json();
+  } catch (error) {
+    console.error('Get users error:', error);
+    return [];
+  }
+};
 
 /**
  * Get all conversations for current user
