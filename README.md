@@ -26,18 +26,22 @@ A modern, bilingual (English/বাংলা) blood donation management platform
 2. **Install dependencies**:
 ```bash
 npm install
-npm d3
-npm list
+npm install d3
+
 ```
 
 3. **Set up environment variables**:
 ```bash
-# Copy the example env file
-make the env.example file to .env 
 
-# Edit .env and add your Gemini API key
-# .env file should contain:
-VITE_GEMINI_API_KEY=your_actual_api_key_here
+# backend .env file should contain:
+
+MONGODB_URI=mongodb+srv://ajmainfayekdiganta_db_user:qDwEeSWvM6pxPiSx@bloodconnect.6jado0c.mongodb.net/?appName=bloodconnect
+
+JWT_SECRET=kdsjfK32dksldfsksdAd323lksdkskskfsdkjieksjio232klSDFWEsjfeisakdjiweksjdei
+
+PORT=5000
+NODE_ENV=development
+VITE_OPENAI_API_KEY=
 ```
 
 4. **Run the development server**:
@@ -62,29 +66,79 @@ The production files will be in the `dist/` folder.
 ## 📁 Project Structure
 
 ```
-bloodconnect-bangladesh/
-├── src/
-│   ├── components/
-│   │   ├── Auth.tsx              # Login/Signup component
-│   │   ├── Dashboard.tsx         # Main dashboard
-│   │   ├── EmergencyMap.tsx      # Interactive map with requests
-│   │   ├── Inventory.tsx         # Blood stock management
-│   │   ├── MythsAssistant.tsx    # AI chatbot
-│   │   └── Profile.tsx           # User profile
-│   ├── services/
-│   │   ├── authService.ts        # Authentication logic
-│   │   ├── dashboardService.ts   # Dashboard data
-│   │   ├── geminiService.ts      # AI integration
-│   │   └── inventoryService.ts   # Inventory management
-│   ├── App.tsx                   # Main app component
-│   ├── main.tsx                  # Entry point
-│   ├── types.ts                  # TypeScript types
-│   └── index.css                 # Global styles
-├── index.html
-├── package.json
-├── vite.config.ts
-├── tailwind.config.js
-└── tsconfig.json
+##Frontend 
+src/
+├── components/              # React Components
+│   ├── Auth.tsx            # Login/Register UI
+│   ├── Dashboard.tsx       # Main dashboard view
+│   ├── RequestBlood.tsx    # Blood request form
+│   ├── Inventory.tsx       # Blood inventory viewer
+│   ├── AppointmentBooking.tsx  # Appointment booking form
+│   ├── Appointments.tsx    # User's appointments list
+│   ├── Chat.tsx            # Real-time chat interface
+│   ├── MythsAssistant.tsx  # AI-powered myths assistant
+│   ├── EmergencyMap.tsx    # Interactive blood request map
+│   └── Profile.tsx         # User profile management
+│
+├── services/                # API Service Layer
+│   ├── authService.ts      # Authentication API calls
+│   ├── dashboardService.ts # Dashboard data fetching
+│   ├── inventoryService.ts # Inventory API calls
+│   ├── requestService.ts   # Blood request API calls
+│   ├── appointmentService.ts # Appointment API calls
+│   ├── chatService.ts      # Chat messaging API calls
+│   └── geminiService.ts    # Gemini/OpenAI integration
+│
+├── App.tsx                  # Root component
+├── main.tsx                # Vite entry point
+└── index.css               # Global styles
+
+##Backend
+
+backend/
+├── config/                    # Configuration Files
+│   ├── database.js           # MongoDB connection setup
+│   └── constants.js          # Application constants (blood types, roles, etc)
+│
+├── models/                    # MongoDB Mongoose Models
+│   ├── User.js               # User schema (donors, recipients, admins)
+│   ├── BloodInventory.js     # Blood stock tracking
+│   ├── BloodRequest.js       # Blood request submissions
+│   ├── Appointment.js        # Donation appointment bookings
+│   ├── Conversation.js       # Chat conversation threads
+│   └── Message.js            # Chat messages
+│
+├── routes/                    # API Route Handlers
+│   ├── auth.js               # Auth endpoints (register, login)
+│   ├── users.js              # User profile management
+│   ├── inventory.js          # Blood inventory endpoints
+│   ├── requests.js           # Blood request endpoints
+│   ├── appointments.js       # Appointment booking endpoints
+│   ├── chat.js               # Chat messaging endpoints
+│   ├── dashboard.js          # Dashboard statistics endpoints
+│   └── notifications.js      # Notification endpoints
+│
+├── middleware/                # Express Middleware
+│   └── auth.js               # JWT authentication middleware
+│
+├── controllers/               # Route Logic Controllers
+│   └── authController.js     # Authentication controller
+│
+├── helpers/                   # Helper Functions
+│   └── responseHandler.js    # Standardized API response formatting
+│
+├── validators/                # Input Validation
+│   └── authValidator.js      # Auth endpoint validation rules
+│
+├── utils/                     # Utility Functions
+│   └── emailService.js       # Email sending service
+│
+├── server.js                 # Main Express server file
+├── package.json              # Backend dependencies
+├── package-lock.json
+├── .env                      # Backend environment variables
+├── .env.example             # Environment template
+└── .gitignore               # Git ignore rules
 ```
 
 ## 🔧 Key Technologies
@@ -94,7 +148,7 @@ bloodconnect-bangladesh/
 - **Tailwind CSS** for styling
 - **Recharts** for data visualization
 - **Leaflet** for interactive maps
-- **Google Gemini AI** for health assistant
+- **Google Open AI** for health assistant
 - **LocalStorage** for mock database (development) (in Future connet into  Claude MongoDB Atlas)
 - **BackEed** Express js and connects APIs from front to backend
 
@@ -128,7 +182,7 @@ bloodconnect-bangladesh/
 - Expiry date monitoring
 - Filtering by city, type, and blood group
 
-### 5. AI Health Assistant
+### 5. AI Health Assistant 
 - Powered by Google Gemini
 - Myth-busting about blood donation
 - Health safety information
@@ -140,16 +194,12 @@ bloodconnect-bangladesh/
 - Medical records
 - Emergency contacts
 - Achievement badges (gamification)
-
+### 7.User to User Message System
+- Login user can communicate with themselves for blood requests
 ## 🌐 Deployment
 
 
-## 🔑 Getting a Gemini API Key
-
-1. Go to [Google AI Studio](https://makersuite.google.com/app/apikey)
-2. Sign in with your Google account
-3. Click "Create API Key"
-4. Copy the key and add it to your `.env` file
+## Get the OpenAi Api key (activated)
 
 ## 🐛 Troubleshooting
 
@@ -170,11 +220,7 @@ bloodconnect-bangladesh/
 
 This project is open source and available for educational purposes.
 
-## 🙏 Acknowledgments
 
-- Google Gemini AI for powering the health assistant
-- OpenStreetMap & Leaflet for maps
-- The open-source community
 
 ## 📧 Contact
 
