@@ -6,9 +6,10 @@ import { getMyAppointments, cancelAppointment, completeAppointment, updateAppoin
 interface AppointmentsProps {
   language: 'en' | 'bn';
   user: User;
+  refreshTrigger?: number; // Add this to trigger refresh from parent
 }
 
-const Appointments: React.FC<AppointmentsProps> = ({ language, user }) => {
+const Appointments: React.FC<AppointmentsProps> = ({ language, user, refreshTrigger }) => {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<'all' | 'scheduled' | 'completed' | 'cancelled'>('all');
@@ -18,7 +19,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ language, user }) => {
 
   useEffect(() => {
     loadAppointments();
-  }, []);
+  }, [refreshTrigger]); // Refresh when trigger changes
 
   const loadAppointments = async () => {
     setLoading(true);
@@ -95,7 +96,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ language, user }) => {
     scheduled: { en: 'Scheduled', bn: 'নির্ধারিত' },
     completed: { en: 'Completed', bn: 'সম্পন্ন' },
     cancelled: { en: 'Cancelled', bn: 'বাতিল' },
-    noAppointments: { en: 'No appointments yet', bn: 'এখনও কোনো অ্যাপয়েন্টমেন্ট নেই' },
+    noAppointments: { en: 'No appointments yet', bn: 'এখনো কোনো অ্যাপয়েন্টমেন্ট নেই' },
     cancel: { en: 'Cancel', bn: 'বাতিল' },
     markComplete: { en: 'Mark Complete', bn: 'সম্পন্ন চিহ্নিত করুন' },
     edit: { en: 'Edit', bn: 'সম্পাদনা' },
@@ -103,7 +104,8 @@ const Appointments: React.FC<AppointmentsProps> = ({ language, user }) => {
     close: { en: 'Close', bn: 'বন্ধ' },
     date: { en: 'Date', bn: 'তারিখ' },
     time: { en: 'Time', bn: 'সময়' },
-    notes: { en: 'Notes', bn: 'নোট' }
+    notes: { en: 'Notes', bn: 'নোট' },
+    refresh: { en: 'Refresh', bn: 'রিফ্রেশ' }
   };
 
   const getStatusColor = (status: string) => {
@@ -132,18 +134,28 @@ const Appointments: React.FC<AppointmentsProps> = ({ language, user }) => {
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-500 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-blue-200">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-sm">
-            <Calendar size={32} />
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-sm">
+              <Calendar size={32} />
+            </div>
+            <div>
+              <h1 className="text-3xl font-black">{labels.title[language]}</h1>
+              <p className="text-blue-100 font-medium">{labels.subtitle[language]}</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-black">{labels.title[language]}</h1>
-            <p className="text-blue-100 font-medium">{labels.subtitle[language]}</p>
-          </div>
+          <button
+            onClick={loadAppointments}
+            disabled={loading}
+            className="bg-white/20 hover:bg-white/30 p-3 rounded-xl backdrop-blur-sm transition-all disabled:opacity-50"
+            title={labels.refresh[language]}
+          >
+            <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+          </button>
         </div>
         <div className="flex gap-4 mt-6">
           <div className="bg-white/10 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/20">
-            <p className="text-xs font-bold text-blue-100 uppercase">Total Appointments</p>
+            <p className="text-xs font-bold text-blue-100 uppercase">Total</p>
             <p className="text-2xl font-black">{appointments.length}</p>
           </div>
           <div className="bg-white/10 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/20">
@@ -185,7 +197,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ language, user }) => {
             <Calendar className="text-gray-400" size={32} />
           </div>
           <h3 className="font-black text-gray-900 text-xl mb-2">{labels.noAppointments[language]}</h3>
-          <p className="text-gray-500 font-medium">Schedule your first donation appointment from the Inventory page</p>
+          <p className="text-gray-500 font-medium">Book your first donation appointment from the "Book Appointment" section</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -219,12 +231,16 @@ const Appointments: React.FC<AppointmentsProps> = ({ language, user }) => {
                   </div>
                   <div className="flex-1">
                     <h3 className="font-black text-gray-900 text-lg leading-tight">{appointment.hospitalName}</h3>
-                    <p className="text-xs font-bold text-gray-500 flex items-center gap-1 mt-1">
-                      <MapPin size={12} /> {appointment.hospitalAddress}
-                    </p>
-                    <p className="text-xs font-bold text-gray-500 flex items-center gap-1 mt-1">
-                      <Phone size={12} /> {appointment.hospitalPhone}
-                    </p>
+                    {appointment.hospitalAddress && appointment.hospitalAddress !== 'N/A' && (
+                      <p className="text-xs font-bold text-gray-500 flex items-center gap-1 mt-1">
+                        <MapPin size={12} /> {appointment.hospitalAddress}
+                      </p>
+                    )}
+                    {appointment.hospitalPhone && appointment.hospitalPhone !== 'N/A' && (
+                      <p className="text-xs font-bold text-gray-500 flex items-center gap-1 mt-1">
+                        <Phone size={12} /> {appointment.hospitalPhone}
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -319,6 +335,7 @@ const Appointments: React.FC<AppointmentsProps> = ({ language, user }) => {
                   type="date"
                   value={editData.appointmentDate}
                   onChange={(e) => setEditData({ ...editData, appointmentDate: e.target.value })}
+                  min={new Date().toISOString().split('T')[0]}
                   className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-base font-bold focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
                 />
               </div>
@@ -326,9 +343,10 @@ const Appointments: React.FC<AppointmentsProps> = ({ language, user }) => {
               <div className="space-y-2">
                 <label className="text-xs font-black text-gray-400 uppercase ml-2">{labels.time[language]}</label>
                 <input
-                  type="time"
+                  type="text"
                   value={editData.appointmentTime}
                   onChange={(e) => setEditData({ ...editData, appointmentTime: e.target.value })}
+                  placeholder="e.g. 10:00 AM"
                   className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-base font-bold focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
                 />
               </div>

@@ -56,15 +56,26 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
 
       // Check if date is in future
       const selectedDate = new Date(formData.appointmentDate);
-      if (selectedDate < new Date()) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (selectedDate < today) {
         throw new Error(language === 'en' ? 'Appointment date must be in the future' : 'অ্যাপয়েন্টমেন্ট তারিখ ভবিষ্যতে হতে হবে');
       }
 
-      await createAppointment(formData);
+      // Generate hospitalId if not provided
+      const appointmentData = {
+        ...formData,
+        hospitalId: formData.hospitalId || `hospital-${formData.hospitalName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
+        hospitalAddress: formData.hospitalAddress || 'N/A',
+        hospitalPhone: formData.hospitalPhone || 'N/A'
+      };
+
+      await createAppointment(appointmentData);
       
       setSuccess(true);
       
-      // Reset form after 3 seconds
+      // Reset form after 2 seconds and call onSuccess
       setTimeout(() => {
         setSuccess(false);
         setFormData({
@@ -77,11 +88,14 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
           appointmentTime: '',
           notes: ''
         });
-        if (onSuccess) onSuccess();
-      }, 3000);
+        if (onSuccess) {
+          onSuccess();
+        }
+      }, 2000);
 
     } catch (error: any) {
-      setErrorMsg(error.message);
+      console.error('Appointment booking error:', error);
+      setErrorMsg(error.message || 'Failed to book appointment');
     } finally {
       setSubmitting(false);
     }
@@ -102,7 +116,7 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
     submit: { en: 'Book Appointment', bn: 'অ্যাপয়েন্টমেন্ট বুক করুন' },
     submitting: { en: 'Booking...', bn: 'বুক করা হচ্ছে...' },
     successTitle: { en: 'Appointment Booked!', bn: 'অ্যাপয়েন্টমেন্ট বুক হয়েছে!' },
-    successMsg: { en: 'Your appointment has been scheduled successfully.', bn: 'আপনার অ্যাপয়েন্টমেন্ট সফলভাবে নির্ধারিত হয়েছে।' }
+    successMsg: { en: 'Your appointment has been scheduled successfully. Check "My Appointments" section.', bn: 'আপনার অ্যাপয়েন্টমেন্ট সফলভাবে নির্ধারিত হয়েছে। "আমার অ্যাপয়েন্টমেন্ট" বিভাগ চেক করুন।' }
   };
 
   const timeSlots = [
@@ -110,6 +124,11 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
     '12:00 PM', '12:30 PM', '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM',
     '04:00 PM', '04:30 PM', '05:00 PM'
   ];
+
+  // Get tomorrow's date as minimum
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const minDate = tomorrow.toISOString().split('T')[0];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -232,7 +251,7 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
                 <label className="text-xs font-black text-gray-400 uppercase ml-2">{labels.appointmentDate[language]} *</label>
                 <input 
                   type="date"
-                  min={new Date().toISOString().split('T')[0]}
+                  min={minDate}
                   className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-2xl text-base font-bold focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all"
                   required
                   value={formData.appointmentDate}
@@ -277,7 +296,7 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
           <button 
             type="submit"
             disabled={submitting}
-            className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black shadow-2xl shadow-blue-200 hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-3 uppercase tracking-widest text-base"
+            className="w-full bg-blue-600 text-white py-5 rounded-[2rem] font-black shadow-2xl shadow-blue-200 hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 uppercase tracking-widest text-base"
           >
             {submitting ? (
               <>{labels.submitting[language]}</>

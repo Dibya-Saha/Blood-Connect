@@ -27,8 +27,10 @@ router.post('/', async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!hospitalId || !bloodGroup || !appointmentDate || !appointmentTime) {
-      return res.status(400).json({ message: 'Missing required fields' });
+    if (!hospitalName || !bloodGroup || !appointmentDate || !appointmentTime) {
+      return res.status(400).json({ 
+        message: 'Missing required fields: hospitalName, bloodGroup, appointmentDate, appointmentTime' 
+      });
     }
 
     // Get donor info
@@ -39,7 +41,10 @@ router.post('/', async (req, res) => {
 
     // Check if appointment date is in the future
     const apptDate = new Date(appointmentDate);
-    if (apptDate < new Date()) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    if (apptDate < today) {
       return res.status(400).json({ message: 'Appointment date must be in the future' });
     }
 
@@ -57,16 +62,19 @@ router.post('/', async (req, res) => {
       }
     }
 
+    // Generate hospitalId if not provided
+    const finalHospitalId = hospitalId || `hospital-${hospitalName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`;
+
     // Create appointment
     const appointment = new Appointment({
       donor: req.user.id,
       donorName: donor.name,
       donorPhone: donor.phone,
       donorBloodGroup: donor.bloodGroup,
-      hospitalId,
+      hospitalId: finalHospitalId,
       hospitalName,
-      hospitalAddress,
-      hospitalPhone,
+      hospitalAddress: hospitalAddress || 'N/A',
+      hospitalPhone: hospitalPhone || 'N/A',
       bloodGroup,
       appointmentDate: apptDate,
       appointmentTime,
@@ -83,7 +91,10 @@ router.post('/', async (req, res) => {
 
   } catch (error) {
     console.error('Create appointment error:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ 
+      message: 'Server error', 
+      error: error.message 
+    });
   }
 });
 
@@ -167,7 +178,7 @@ router.put('/:id/complete', async (req, res) => {
     const user = await User.findById(req.user.id);
     if (user) {
       user.lastDonationDate = new Date();
-      user.points += 50;
+      user.points = (user.points || 0) + 50;
       await user.save();
     }
 
@@ -240,7 +251,10 @@ router.put('/:id', async (req, res) => {
 
     if (appointmentDate) {
       const apptDate = new Date(appointmentDate);
-      if (apptDate < new Date()) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (apptDate < today) {
         return res.status(400).json({ message: 'Appointment date must be in the future' });
       }
       appointment.appointmentDate = apptDate;
@@ -258,6 +272,45 @@ router.put('/:id', async (req, res) => {
 
   } catch (error) {
     console.error('Update appointment error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/appointments/hospital/:hospitalId
+// @desc    Get all appointments for a hospital (admin use)
+// @access  Private
+router.get('/hospital/:hospitalId', async (req, res) => {
+  try {
+    const appointments = await Appointment.find({ 
+      hospitalId: req.params.hospitalId 
+    })
+    .populate('donor', 'name phone bloodGroup email')
+    .sort({ appointmentDate: -1 });
+
+    res.json(appointments);
+  } catch (error) {
+    console.error('Get hospital appointments error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// @route   GET /api/appointments/stats/overview
+// @desc    Get appointment statistics
+// @access  Private
+router.get('/stats/overview', async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const stats = {
+      total: await Appointment.countDocuments({ donor: userId }),
+      scheduled: await Appointment.countDocuments({ donor: userId, status: 'SCHEDULED' }),
+      completed: await Appointment.countDocuments({ donor: userId, status: 'COMPLETED' }),
+      cancelled: await Appointment.countDocuments({ donor: userId, status: 'CANCELLED' })
+    };
+
+    res.json(stats);
+  } catch (error) {
+    console.error('Get stats error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 });

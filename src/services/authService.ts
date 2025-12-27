@@ -19,8 +19,8 @@ export const login = async (email: string, password: string): Promise<User> => {
       throw new Error(data.message || 'Login failed');
     }
 
-    // Store token in localStorage
-    localStorage.setItem('token', data.token);
+    // Store token in localStorage - CHANGED FROM 'token' to 'jwt_token'
+    localStorage.setItem('jwt_token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
 
     return data.user;
@@ -51,8 +51,8 @@ export const signup = async (formData: any): Promise<User> => {
       throw new Error(data.message || 'Signup failed');
     }
 
-    // Store token in localStorage
-    localStorage.setItem('token', data.token);
+    // Store token in localStorage - CHANGED FROM 'token' to 'jwt_token'
+    localStorage.setItem('jwt_token', data.token);
     localStorage.setItem('user', JSON.stringify(data.user));
 
     return data.user;
@@ -64,13 +64,13 @@ export const signup = async (formData: any): Promise<User> => {
 
 // Logout function
 export const logout = () => {
-  localStorage.removeItem('token');
+  localStorage.removeItem('jwt_token'); // CHANGED FROM 'token' to 'jwt_token'
   localStorage.removeItem('user');
 };
 
 // Check if user is authenticated
 export const isAuthenticated = (): boolean => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('jwt_token'); // CHANGED FROM 'token' to 'jwt_token'
   return !!token;
 };
 
@@ -87,17 +87,5 @@ export const getCurrentUser = (): User | null => {
 
 // Get auth token
 export const getToken = (): string | null => {
-  return localStorage.getItem('token');
+  return localStorage.getItem('jwt_token'); // CHANGED FROM 'token' to 'jwt_token'
 };
-
-// REMOVE OR COMMENT OUT OLD MOCK FUNCTIONS
-// These were causing the problem - they bypass your backend entirely
-/*
-export const mockLogin = async (email: string, password: string): Promise<User> => {
-  // OLD MOCK CODE - DO NOT USE
-};
-
-export const mockSignup = async (formData: any): Promise<User> => {
-  // OLD MOCK CODE - DO NOT USE
-};
-*/
