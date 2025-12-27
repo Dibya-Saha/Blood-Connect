@@ -137,10 +137,12 @@ router.get('/:id', async (req, res) => {
 });
 
 // @route   PUT /api/appointments/:id/complete
-// @desc    Mark appointment as completed and update inventory
+// @desc    Mark appointment as completed and update inventory (AUTO-CREATE MISSING RECORDS)
 // @access  Private
 router.put('/:id/complete', async (req, res) => {
   try {
+    console.log('🚀 Starting appointment completion...');
+    
     const appointment = await Appointment.findById(req.params.id);
 
     if (!appointment) {
@@ -159,19 +161,89 @@ router.put('/:id/complete', async (req, res) => {
     appointment.status = 'COMPLETED';
     appointment.completedAt = new Date();
     await appointment.save();
+    console.log('✅ Appointment marked as COMPLETED');
 
-    // Update blood inventory
-    const inventory = await BloodInventory.findOne({
-      $or: [
-        { hospitalId: appointment.hospitalId },
-        { hospitalName: { $regex: appointment.hospitalName, $options: 'i' } }
-      ],
+    // Search for inventory record
+    console.log('🔍 Searching for inventory:', {
+      hospitalName: appointment.hospitalName,
+      bloodType: appointment.bloodGroup
+    });
+
+    let inventory = await BloodInventory.findOne({
+      hospitalName: appointment.hospitalName,
       bloodType: appointment.bloodGroup
     });
 
     if (inventory) {
+      // Record exists - just increment
+      const oldQuantity = inventory.quantity;
       inventory.quantity += 1;
       await inventory.save();
+      
+      console.log('✅ Inventory updated:', {
+        hospital: inventory.hospitalName,
+        bloodType: inventory.bloodType,
+        oldQuantity: oldQuantity,
+        newQuantity: inventory.quantity
+      });
+    } else {
+      // Record doesn't exist - create it!
+      console.log('⚠️ Inventory record not found. Creating new record...');
+      
+      // Get hospital info from an existing record of the same hospital (any blood type)
+      const existingHospitalRecord = await BloodInventory.findOne({
+        hospitalName: appointment.hospitalName
+      });
+
+      let hospitalData;
+      
+      if (existingHospitalRecord) {
+        // Use existing hospital data
+        console.log('✅ Found existing hospital data, copying details...');
+        hospitalData = {
+          hospitalName: existingHospitalRecord.hospitalName,
+          hospitalType: existingHospitalRecord.hospitalType,
+          city: existingHospitalRecord.city,
+          division: existingHospitalRecord.division,
+          phone: existingHospitalRecord.phone,
+          email: existingHospitalRecord.email,
+          is247: existingHospitalRecord.is247
+        };
+      } else {
+        // No existing record - use appointment data as fallback
+        console.log('⚠️ No existing hospital records found, using appointment data...');
+        
+        // Parse city and division from address
+        const addressParts = appointment.hospitalAddress.split(',').map(s => s.trim());
+        
+        hospitalData = {
+          hospitalName: appointment.hospitalName,
+          hospitalType: 'GOVERNMENT', // Default
+          city: addressParts[0] || 'Unknown',
+          division: addressParts[1] || addressParts[0] || 'Unknown',
+          phone: appointment.hospitalPhone || 'N/A',
+          email: `contact@${appointment.hospitalName.toLowerCase().replace(/\s+/g, '')}.com`,
+          is247: false
+        };
+      }
+
+      // Create new inventory record with quantity = 1
+      inventory = new BloodInventory({
+        ...hospitalData,
+        bloodType: appointment.bloodGroup,
+        quantity: 1, // First donation for this blood type
+        expiryDate: new Date(Date.now() + 35 * 24 * 60 * 60 * 1000), // 35 days from now
+        status: 'CRITICAL' // Will be auto-updated by schema pre-save hook
+      });
+
+      await inventory.save();
+      
+      console.log('✅ NEW inventory record created:', {
+        hospital: inventory.hospitalName,
+        bloodType: inventory.bloodType,
+        quantity: inventory.quantity,
+        status: inventory.status
+      });
     }
 
     // Update user's last donation date and points
@@ -180,17 +252,28 @@ router.put('/:id/complete', async (req, res) => {
       user.lastDonationDate = new Date();
       user.points = (user.points || 0) + 50;
       await user.save();
+      
+      console.log('✅ User updated:', {
+        userId: user._id,
+        points: user.points,
+        lastDonation: user.lastDonationDate
+      });
     }
 
     res.json({
       message: 'Donation completed successfully',
       appointment,
-      pointsEarned: 50
+      pointsEarned: 50,
+      inventoryUpdated: true,
+      newRecord: !inventory.createdAt ? false : (new Date() - inventory.createdAt) < 1000 // Check if just created
     });
 
   } catch (error) {
-    console.error('Complete appointment error:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('❌ Complete appointment error:', error);
+    res.status(500).json({ 
+      message: 'Server error',
+      error: error.message 
+    });
   }
 });
 
